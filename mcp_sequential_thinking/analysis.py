@@ -8,9 +8,10 @@ from typing import List, Dict, Any
 from collections import Counter
 from datetime import datetime
 import numpy as np
-from .models import ThoughtData, ThoughtStage
+from .models import ThoughtData, ThoughtStage, ThoughtType
 from .logging_conf import configure_logging
 from .advanced_analysis import AdvancedAnalyzer
+from .reflection import ReflectionEngine
 from .config import config
 
 logger = configure_logging("sequential-thinking.analysis")
@@ -300,7 +301,11 @@ class ThoughtAnalyzer:
                     "thoughtNumber": thought.thought_number,
                     "totalThoughts": thought.total_thoughts,
                     "nextThoughtNeeded": thought.next_thought_needed,
+                    "thoughtType": thought.thought_type,
                     "stage": thought.stage,
+                    "parentThoughtId": thought.parent_thought_id,
+                    "revisesThoughtId": thought.revises_thought_id,
+                    "branchLabel": thought.branch_label,
                     "tags": thought.tags,
                     "axiomsUsed": thought.axioms_used,
                     "assumptionsChallenged": thought.assumptions_challenged,
@@ -314,6 +319,7 @@ class ThoughtAnalyzer:
                     "relatedThoughtSummaries": [
                         {
                             "thoughtNumber": t.thought_number,
+                            "thoughtType": t.thought_type,
                             "stage": t.stage,
                             "snippet": (t.thought[:100] + "..."
                                        if len(t.thought) > 100
@@ -325,6 +331,7 @@ class ThoughtAnalyzer:
                     "isFirstInStage": is_first_in_stage,
                     "suggestedPrompt": None
                 },
+                "reflection": None,
                 "context": {
                     "thoughtHistoryLength": len(all_thoughts),
                     "currentStage": thought.stage
@@ -337,5 +344,17 @@ class ThoughtAnalyzer:
             analysis_result["thoughtAnalysis"]["analysis"]["suggestedPrompt"] = (
                 ThoughtAnalyzer._generate_contextual_prompt(thought, all_thoughts)
             )
+
+        # Automatic reflection engine
+        try:
+            reflection = ReflectionEngine.generate_reflection(
+                current_thought=thought,
+                all_thoughts=all_thoughts,
+                lang=lang
+            )
+            if reflection:
+                analysis_result["thoughtAnalysis"]["reflection"] = reflection
+        except Exception as e:
+            logger.error(f"Error during reflection generation: {e}")
 
         return analysis_result

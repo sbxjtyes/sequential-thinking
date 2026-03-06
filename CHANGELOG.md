@@ -1,5 +1,25 @@
 # Changelog
 
+## Version 0.7.0 (2026-03-07) — Deep Reasoning Engine
+
+### Added
+- **`ThoughtType` cognitive operation types**: `hypothesis`, `verification`, `analysis`, `critique`, `synthesis`, `decomposition`, `observation`, `revision`. Each thought can be tagged with a type describing the cognitive operation it represents.
+- **`ReflectionEngine`** (`reflection.py`): Automatic reflection prompt generator that detects 5 reasoning weakness patterns:
+  - Consecutive same-type thoughts (suggests switching cognitive mode)
+  - Missing critique (warns when no critical reflection for 5+ thoughts)
+  - Unverified synthesis (warns about drawing conclusions without validation)
+  - Confidence drops (highlights significant confidence decreases)
+  - Invalid revision targets (validates `revises_thought_id` references)
+- **Tree-structured reasoning**: New `parent_thought_id` field enables non-linear exploration through branching.
+- **Thought revision support**: New `revises_thought_id` field allows marking corrections to earlier thoughts.
+- **Branch labeling**: New `branch_label` field for organizing parallel exploration paths (e.g., "Plan A", "Plan B").
+- **Reasoning health metrics**: `typeDistribution`, `branchCount`, `revisionCount`, `maxDepth` returned in reflection data.
+
+### Changed
+- `process_thought` returns a new `reflection` block alongside `analysis` with automatic reasoning feedback.
+- `process_thought` now accepts `thought_type`, `parent_thought_id`, `revises_thought_id`, `branch_label` parameters.
+- Database schema updated: `ThoughtModel` gains 4 new columns. **Breaking**: requires database recreation (delete old `.db` file).
+
 ## Version 0.6.0 (2026-03-07) — Architecture Refactoring
 
 ### Breaking Changes

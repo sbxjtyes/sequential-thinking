@@ -56,8 +56,12 @@ class ThoughtModel(Base):
     thought_number = Column(Integer, nullable=False)
     total_thoughts = Column(Integer, nullable=False)
     next_thought_needed = Column(Boolean, nullable=False)
+    thought_type = Column(String, nullable=False, default='analysis')
     stage = Column(String, nullable=False)
-    confidence_level = Column(Float, default=0.0)
+    parent_thought_id = Column(String, nullable=True)
+    revises_thought_id = Column(String, nullable=True)
+    branch_label = Column(String, nullable=True)
+    confidence_level = Column(Float, default=0.5)
     timestamp = Column(String, nullable=False)
 
     tags = relationship("TagModel", secondary=thought_tags_association, back_populates="thoughts")
@@ -126,7 +130,11 @@ class ThoughtStorage:
                 thought_number=thought_data.thought_number,
                 total_thoughts=thought_data.total_thoughts,
                 next_thought_needed=thought_data.next_thought_needed,
+                thought_type=thought_data.thought_type,
                 stage=thought_data.stage,
+                parent_thought_id=thought_data.parent_thought_id,
+                revises_thought_id=thought_data.revises_thought_id,
+                branch_label=thought_data.branch_label,
                 confidence_level=thought_data.confidence_level,
                 timestamp=thought_data.timestamp
             )
@@ -152,7 +160,11 @@ class ThoughtStorage:
                     thought_number=tm.thought_number,
                     total_thoughts=tm.total_thoughts,
                     next_thought_needed=tm.next_thought_needed,
+                    thought_type=tm.thought_type or 'analysis',
                     stage=tm.stage,
+                    parent_thought_id=tm.parent_thought_id,
+                    revises_thought_id=tm.revises_thought_id,
+                    branch_label=tm.branch_label,
                     confidence_level=tm.confidence_level,
                     timestamp=tm.timestamp,
                     tags=[tag.name for tag in tm.tags],

@@ -1,10 +1,11 @@
 """Data models for the sequential thinking process.
 
 This module defines the core data structures used throughout the application,
-including ThoughtStage constants and the ThoughtData Pydantic model.
+including ThoughtStage constants, ThoughtType cognitive operations, and the
+ThoughtData Pydantic model.
 """
 
-from typing import List, Dict, Any
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import uuid4, UUID
 from pydantic import BaseModel, Field, field_validator
@@ -48,6 +49,40 @@ class ThoughtStage:
     ]
 
 
+class ThoughtType:
+    """Cognitive operation types for structured reasoning.
+
+    Each thought should be tagged with a type that describes what kind of
+    cognitive operation it represents. This enables reasoning chain analysis,
+    automatic reflection prompts, and quality assessment.
+
+    Predefined types:
+        - HYPOTHESIS: Proposing a possible explanation or solution
+        - VERIFICATION: Testing/validating a hypothesis with evidence
+        - ANALYSIS: Logical reasoning and inference
+        - CRITIQUE: Critical reflection, identifying flaws or gaps
+        - SYNTHESIS: Combining multiple insights into a conclusion
+        - DECOMPOSITION: Breaking a problem into sub-problems
+        - OBSERVATION: Recording facts, data, or observations
+        - REVISION: Correcting or updating an earlier thought
+
+    Any string is accepted as a valid thought type.
+    """
+    HYPOTHESIS = "hypothesis"
+    VERIFICATION = "verification"
+    ANALYSIS = "analysis"
+    CRITIQUE = "critique"
+    SYNTHESIS = "synthesis"
+    DECOMPOSITION = "decomposition"
+    OBSERVATION = "observation"
+    REVISION = "revision"
+
+    ALL = [
+        HYPOTHESIS, VERIFICATION, ANALYSIS, CRITIQUE,
+        SYNTHESIS, DECOMPOSITION, OBSERVATION, REVISION,
+    ]
+
+
 class ThoughtData(BaseModel):
     """Data structure for a single thought in the sequential thinking process.
 
@@ -70,9 +105,25 @@ class ThoughtData(BaseModel):
     thought_number: int
     total_thoughts: int
     next_thought_needed: bool
+    thought_type: str = Field(
+        default=ThoughtType.ANALYSIS,
+        description="Cognitive operation type. Predefined types available in ThoughtType."
+    )
     stage: str = Field(
         default=ThoughtStage.PROBLEM_DEFINITION,
-        description="Thinking stage name. Any string is accepted; predefined stages available in ThoughtStage."
+        description="Thinking stage name. Any string is accepted."
+    )
+    parent_thought_id: Optional[str] = Field(
+        default=None,
+        description="UUID of the parent thought for tree-structured reasoning. null = root."
+    )
+    revises_thought_id: Optional[str] = Field(
+        default=None,
+        description="UUID of an earlier thought that this thought revises/corrects."
+    )
+    branch_label: Optional[str] = Field(
+        default=None,
+        description="Label for reasoning branches (e.g. 'Plan A', 'Plan B')."
     )
     tags: List[str] = Field(default_factory=list)
     axioms_used: List[str] = Field(default_factory=list)
@@ -146,7 +197,11 @@ class ThoughtData(BaseModel):
             "thoughtNumber": self.thought_number,
             "totalThoughts": self.total_thoughts,
             "nextThoughtNeeded": self.next_thought_needed,
+            "thoughtType": self.thought_type,
             "stage": self.stage,
+            "parentThoughtId": self.parent_thought_id,
+            "revisesThoughtId": self.revises_thought_id,
+            "branchLabel": self.branch_label,
             "tags": self.tags,
             "axiomsUsed": self.axioms_used,
             "assumptionsChallenged": self.assumptions_challenged,
@@ -169,11 +224,14 @@ class ThoughtData(BaseModel):
         Returns:
             ThoughtData: A new ThoughtData instance.
         """
-        # camelCase → snake_case mapping
         mappings = {
             "thoughtNumber": "thought_number",
             "totalThoughts": "total_thoughts",
             "nextThoughtNeeded": "next_thought_needed",
+            "thoughtType": "thought_type",
+            "parentThoughtId": "parent_thought_id",
+            "revisesThoughtId": "revises_thought_id",
+            "branchLabel": "branch_label",
             "axiomsUsed": "axioms_used",
             "assumptionsChallenged": "assumptions_challenged",
             "confidenceLevel": "confidence_level",
@@ -189,8 +247,10 @@ class ThoughtData(BaseModel):
                 snake_data[snake_key] = data[camel_key]
 
         # Copy fields that are the same in both formats
-        for key in ["thought", "stage", "tags", "timestamp"]:
-            if key in data:
+        for key in ["thought", "stage", "tags", "timestamp",
+                     "thought_type", "parent_thought_id", "revises_thought_id",
+                     "branch_label"]:
+            if key in data and key not in snake_data:
                 snake_data[key] = data[key]
 
         # Also accept snake_case keys directly (for flexibility)

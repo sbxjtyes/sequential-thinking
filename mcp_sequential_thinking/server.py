@@ -47,7 +47,11 @@ def process_thought(
     thought_number: int,
     total_thoughts: int,
     next_thought_needed: bool,
+    thought_type: str = "analysis",
     stage: str = "Problem Definition",
+    parent_thought_id: Optional[str] = None,
+    revises_thought_id: Optional[str] = None,
+    branch_label: Optional[str] = None,
     tags: Optional[List[str]] = None,
     axioms_used: Optional[List[str]] = None,
     assumptions_challenged: Optional[List[str]] = None,
@@ -58,42 +62,49 @@ def process_thought(
     ctx: Optional[Context] = None,
 ) -> dict:
     """
-    记录单个思考节点并返回深度分析结果 | Records a thought with comprehensive analysis.
+    记录单个思考节点并返回深度分析结果（含自动反思） | Records a thought with analysis and reflection.
 
-    这是构建思考序列的核心工具。它会存储思考内容及其元数据，执行语义分析以发现关联思考，
-    计算内容相似度，并自动生成下一步的上下文提示。支持中英文内容分析。
+    这是构建结构化推理链的核心工具。每个思考都标记了认知操作类型（假设/验证/分析/反思/综合等），
+    支持树状分支探索和修订。系统会自动检测推理模式并生成反思提示，引导更严谨的深度思考。
 
-    This is the primary tool for building a thought sequence. It stores the thought and metadata,
-    performs semantic analysis to find related thoughts, calculates content similarity, and
-    automatically generates contextual prompts for the next step.
+    This is the core tool for building a structured reasoning chain. Each thought is tagged
+    with a cognitive operation type (hypothesis/verification/analysis/critique/synthesis etc.),
+    supports tree-structured branching and revision. The system automatically detects reasoning
+    patterns and generates reflection prompts for more rigorous thinking.
 
     Args:
         thought: 思考的主要内容 | The main content of the thought.
-        thought_number: 当前思考的序号（如 1, 2, 3...）| Sequence number of this thought.
+        thought_number: 当前思考的序号 | Sequence number of this thought.
         total_thoughts: 计划的思考总数 | Total number of thoughts planned.
         next_thought_needed: 是否还需要后续思考 | Whether more thoughts are expected.
-        stage: 思考所属阶段，接受任意字符串。预定义阶段包括 "Problem Definition"、
-               "Requirement Analysis"、"Technical Design"、"Implementation"、
-               "Testing and Refactoring"、"Integration and Deployment"。
-               也支持自定义阶段如 "Literature Review"、"Data Collection" 等。
-               | The thinking stage. Any string is accepted.
-        tags: 用于分类的关键词列表（可选）| Optional list of keywords for categorization.
-        axioms_used: 所依据的原则列表（可选）| Optional list of principles relied upon.
-        assumptions_challenged: 被质疑的假设列表（可选）| Optional list of challenged assumptions.
-        confidence_level: 置信度分数 0.0-1.0，默认 0.5 | Confidence score, defaults to 0.5.
-        supporting_evidence: 支持证据列表（可选）| Optional list of supporting evidence.
-        counter_arguments: 反驳论点列表（可选）| Optional list of counter-arguments.
-        lang: 分析语言 'en'/'zh'，默认使用 config.yaml | Language for analysis, defaults to config.
-        ctx: MCP 上下文对象（用于进度报告）| MCP context for progress reporting.
+        thought_type: 认知操作类型（可选）。预定义类型：
+               "hypothesis"（假设）、"verification"（验证）、"analysis"（分析）、
+               "critique"（批判反思）、"synthesis"（综合）、"decomposition"（分解）、
+               "observation"（观察）、"revision"（修订）。也接受自定义类型。默认 "analysis"。
+               | Cognitive operation type. Defaults to "analysis".
+        stage: 思考所属阶段，接受任意字符串 | The thinking stage. Any string is accepted.
+        parent_thought_id: 父思考的 UUID（用于树状分支），null 表示根节点 |
+               UUID of parent thought for tree-structured reasoning.
+        revises_thought_id: 被修订思考的 UUID（标记修正关系）|
+               UUID of the earlier thought being revised.
+        branch_label: 分支标签（如 "方案A"、"方案B"）| Branch label for exploration paths.
+        tags: 关键词列表（可选）| Optional keywords for categorization.
+        axioms_used: 所依据的原则列表（可选）| Optional principles relied upon.
+        assumptions_challenged: 被质疑的假设列表（可选）| Optional challenged assumptions.
+        confidence_level: 置信度 0.0-1.0，默认 0.5 | Confidence score, defaults to 0.5.
+        supporting_evidence: 支持证据列表（可选）| Optional supporting evidence.
+        counter_arguments: 反驳论点列表（可选）| Optional counter-arguments.
+        lang: 分析语言 'en'/'zh' | Language for analysis, defaults to config.
+        ctx: MCP 上下文对象 | MCP context for progress reporting.
 
     Returns:
-        包含思考分析结果的字典 | Dictionary with analysis results.
+        包含分析结果和反思提示的字典 | Dict with analysis results and reflection prompts.
     """
     try:
         # Set language from config if not provided
         final_lang = lang if lang is not None else config.features.semantic_analysis.default_lang
 
-        logger.info(f"Processing thought #{thought_number}/{total_thoughts} in stage '{stage}' for language '{final_lang}'")
+        logger.info(f"Processing thought #{thought_number}/{total_thoughts} [{thought_type}] in stage '{stage}' for language '{final_lang}'")
 
         if ctx:
             ctx.report_progress(thought_number - 1, total_thoughts)
@@ -103,7 +114,11 @@ def process_thought(
             thought_number=thought_number,
             total_thoughts=total_thoughts,
             next_thought_needed=next_thought_needed,
+            thought_type=thought_type,
             stage=stage,
+            parent_thought_id=parent_thought_id,
+            revises_thought_id=revises_thought_id,
+            branch_label=branch_label,
             tags=tags or [],
             axioms_used=axioms_used or [],
             assumptions_challenged=assumptions_challenged or [],
