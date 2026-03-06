@@ -1,6 +1,6 @@
 [project]
 name = "sequential-thinking"
-version = "0.3.0"
+version = "0.7.1"
 description = "A Sequential Thinking MCP Server for advanced problem solving"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -10,9 +10,13 @@ authors = [
    { name = "Arben Ademi", email = "arben.ademi@tuta.io" }
 ]
 dependencies = [
-   "mcp[cli]>=1.2.0",
-   "rich>=13.7.0",
-   "pyyaml>=6.0",
+    "fastmcp",
+    "pydantic",
+    "rich",
+    "pyyaml",
+    "scikit-learn",
+    "numpy",
+    "jieba"
 ]
 
 [project.scripts]
@@ -32,14 +36,8 @@ vis = [
     "numpy>=1.20.0",
 ]
 
-web = [
-    "fastapi>=0.100.0",
-    "uvicorn>=0.20.0",
-    "pydantic>=2.0.0",
-]
-
 all = [
-    "sequential-thinking[dev,vis,web]",
+    "sequential-thinking[dev,vis]",
 ]
 
 [project.urls]

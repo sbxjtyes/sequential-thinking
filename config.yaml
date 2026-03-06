@@ -1,0 +1,12 @@
+# Application Configuration for Sequential Thinking MCP
+
+# Feature flags
+features:
+  # Settings for semantic (content-based) analysis
+  semanticAnalysis:
+    enabled: true
+    defaultLang: "zh" # Set default language for analysis ('en' or 'zh')
+
+  # Settings for automatic prompt generation on new stage entry
+  automaticPrompts:
+    enabled: true

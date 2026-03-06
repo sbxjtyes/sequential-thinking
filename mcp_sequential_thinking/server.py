@@ -32,14 +32,8 @@ logger = configure_logging("sequential-thinking.server")
 
 mcp = FastMCP("sequential-thinking")
 
-logger.info("--- CREATING ThoughtStorage INSTANCE FROM CONFIG ---")
-# Get project root to resolve relative db path from config
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Construct the absolute path for the database from config
-db_path = os.path.join(project_root, config.storage.path)
-db_url = f"sqlite:///{db_path}"
-storage = ThoughtStorage(db_url=db_url)
-logger.info(f"--- ThoughtStorage INSTANCE CREATED with DB at {db_url} ---")
+storage = ThoughtStorage()
+logger.info("--- In-memory ThoughtStorage initialized ---")
 
 @mcp.tool()
 def process_thought(

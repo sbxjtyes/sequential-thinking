@@ -1,6 +1,6 @@
 # Changelog
 
-## Version 0.7.1 (2026-03-07) — Dead Code Cleanup
+## Version 0.7.1 (2026-03-07) — Dead Code Cleanup & Database Removal
 
 ### Removed
 - `debug_mcp_connection.py`: One-off debug script, not production code.
@@ -11,8 +11,17 @@
 - `tests/test_storage.py`: Stale tests using old `ThoughtStorage(dir_path)` file-based API (`thought_history`, `get_thoughts_by_stage`).
 - `tests/__init__.py`: Empty init file, no longer needed.
 
+- **SQLAlchemy database**: Replaced 253-line ORM (11 tables) with 115-line in-memory list. Thoughts now live for the server process lifetime; use `export_session`/`import_session` for explicit persistence.
+- **Dependencies removed**: `sqlalchemy`, `portalocker`. 
+- **Optional `[web]` deps group**: Removed (FastAPI web server was deleted).
+- `config.yaml` `storage` section: No longer needed.
+- `StorageConfig` class from `config.py`: Removed.
+
 ### Changed
+- `ThoughtStorage()` constructor no longer takes `db_url` parameter.
 - Updated `README.md` project structure to reflect file removals and additions.
+- Updated `.gitignore` to ignore `*.db` and `*.egg-info/`.
+- Updated `pyproject.toml` version to `0.7.1`.
 
 ## Version 0.7.0 (2026-03-07) — Deep Reasoning Engine
 

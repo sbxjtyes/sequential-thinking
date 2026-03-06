@@ -4,9 +4,7 @@ from typing import Optional
 import os
 
 # Define Pydantic models for type-safe configuration
-class StorageConfig(BaseModel):
-    type: str = "sqlite"
-    path: str = "sequential_thinking.db"
+
 
 class SemanticAnalysisConfig(BaseModel):
     enabled: bool = True
@@ -20,7 +18,6 @@ class FeaturesConfig(BaseModel):
     automatic_prompts: AutomaticPromptsConfig = Field(default_factory=AutomaticPromptsConfig, alias="automaticPrompts")
 
 class AppConfig(BaseModel):
-    storage: StorageConfig = Field(default_factory=StorageConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
 
 def load_config() -> AppConfig:
@@ -30,7 +27,6 @@ def load_config() -> AppConfig:
     """
     # Default config
     config_data = {
-        'storage': {'type': 'sqlite', 'path': 'sequential_thinking.db'},
         'features': {
             'semanticAnalysis': {'enabled': True, 'defaultLang': 'en'},
             'automaticPrompts': {'enabled': True}
@@ -47,8 +43,6 @@ def load_config() -> AppConfig:
                 yaml_data = yaml.safe_load(f)
                 # Deep merge yaml_data into config_data
                 if yaml_data:
-                    if 'storage' in yaml_data:
-                        config_data['storage'].update(yaml_data['storage'])
                     if 'features' in yaml_data:
                         if 'semanticAnalysis' in yaml_data['features']:
                             config_data['features']['semanticAnalysis'].update(yaml_data['features']['semanticAnalysis'])
