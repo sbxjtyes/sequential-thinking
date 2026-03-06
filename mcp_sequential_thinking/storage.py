@@ -1,152 +1,241 @@
 import json
-import logging
-import os
-import threading
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from pathlib import Path
 from datetime import datetime
 
-import portalocker
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Table, ForeignKey
+from sqlalchemy.orm import sessionmaker, relationship, declarative_base
 
-from .models import ThoughtData, ThoughtStage
+from .models import ThoughtData
 from .logging_conf import configure_logging
-from .storage_utils import prepare_thoughts_for_serialization, save_thoughts_to_file, load_thoughts_from_file
 
-logger = configure_logging("sequential-thinking.storage")
+logger = configure_logging("sequential-thinking.database-storage")
+
+Base = declarative_base()
+
+# Association Tables for Many-to-Many relationships
+thought_tags_association = Table(
+    'thought_tags',
+    Base.metadata,
+    Column('thought_id', String, ForeignKey('thoughts.id')),
+    Column('tag_id', Integer, ForeignKey('tags.id'))
+)
+
+thought_axioms_association = Table(
+    'thought_axioms',
+    Base.metadata,
+    Column('thought_id', String, ForeignKey('thoughts.id')),
+    Column('axiom_id', Integer, ForeignKey('axioms.id'))
+)
+
+thought_assumptions_association = Table(
+    'thought_assumptions',
+    Base.metadata,
+    Column('thought_id', String, ForeignKey('thoughts.id')),
+    Column('assumption_id', Integer, ForeignKey('assumptions.id'))
+)
+
+thought_evidence_association = Table(
+    'thought_evidence',
+    Base.metadata,
+    Column('thought_id', String, ForeignKey('thoughts.id')),
+    Column('evidence_id', Integer, ForeignKey('supporting_evidence.id'))
+)
+
+thought_counters_association = Table(
+    'thought_counters',
+    Base.metadata,
+    Column('thought_id', String, ForeignKey('thoughts.id')),
+    Column('counter_id', Integer, ForeignKey('counter_arguments.id'))
+)
+
+class ThoughtModel(Base):
+    __tablename__ = 'thoughts'
+    id = Column(String, primary_key=True)
+    thought = Column(Text, nullable=False)
+    thought_number = Column(Integer, nullable=False)
+    total_thoughts = Column(Integer, nullable=False)
+    next_thought_needed = Column(Boolean, nullable=False)
+    stage = Column(String, nullable=False)
+    confidence_level = Column(Float, default=0.0)
+    timestamp = Column(String, nullable=False)
+
+    tags = relationship("TagModel", secondary=thought_tags_association, back_populates="thoughts")
+    axioms_used = relationship("AxiomModel", secondary=thought_axioms_association, back_populates="thoughts")
+    assumptions_challenged = relationship("AssumptionModel", secondary=thought_assumptions_association, back_populates="thoughts")
+    supporting_evidence = relationship("EvidenceModel", secondary=thought_evidence_association, back_populates="thoughts")
+    counter_arguments = relationship("CounterArgumentModel", secondary=thought_counters_association, back_populates="thoughts")
+
+class TagModel(Base):
+    __tablename__ = 'tags'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    thoughts = relationship("ThoughtModel", secondary=thought_tags_association, back_populates="tags")
+
+class AxiomModel(Base):
+    __tablename__ = 'axioms'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    thoughts = relationship("ThoughtModel", secondary=thought_axioms_association, back_populates="axioms_used")
+
+class AssumptionModel(Base):
+    __tablename__ = 'assumptions'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    thoughts = relationship("ThoughtModel", secondary=thought_assumptions_association, back_populates="assumptions_challenged")
+
+class EvidenceModel(Base):
+    __tablename__ = 'supporting_evidence'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    thoughts = relationship("ThoughtModel", secondary=thought_evidence_association, back_populates="supporting_evidence")
+
+class CounterArgumentModel(Base):
+    __tablename__ = 'counter_arguments'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    thoughts = relationship("ThoughtModel", secondary=thought_counters_association, back_populates="counter_arguments")
 
 
 class ThoughtStorage:
-    """Storage manager for thought data."""
+    """Database-backed storage manager for thought data."""
 
-    def __init__(self, storage_dir: Optional[str] = None):
-        """Initialize the storage manager.
+    def __init__(self, db_url: str):
+        logger.info(f"--- ENTERING ThoughtStorage __init__ ---")
+        logger.info(f"Initializing database storage with URL: {db_url}")
+        self.engine = create_engine(db_url)
+        logger.info(f"--- DATABASE ENGINE CREATED ---")
+        Base.metadata.create_all(self.engine)
+        logger.info(f"--- METADATA.CREATE_ALL CALLED ---")
+        self.Session = sessionmaker(bind=self.engine)
+        logger.info(f"--- ThoughtStorage INITIALIZED SUCCESSFULLY ---")
 
-        Args:
-            storage_dir: Directory to store thought data files. If None, uses a default directory.
-        """
-        if storage_dir is None:
-            # Use user's home directory by default
-            home_dir = Path.home()
-            self.storage_dir = home_dir / ".mcp_sequential_thinking"
-        else:
-            self.storage_dir = Path(storage_dir)
+    def _get_or_create(self, session, model, name):
+        instance = session.query(model).filter_by(name=name).first()
+        if not instance:
+            instance = model(name=name)
+            session.add(instance)
+            session.flush() # Flush to get the ID without committing
+        return instance
 
-        # Create storage directory if it doesn't exist
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
+    def add_thought(self, thought_data: ThoughtData) -> None:
+        with self.Session() as session:
+            thought_model = ThoughtModel(
+                id=str(thought_data.id),
+                thought=thought_data.thought,
+                thought_number=thought_data.thought_number,
+                total_thoughts=thought_data.total_thoughts,
+                next_thought_needed=thought_data.next_thought_needed,
+                stage=thought_data.stage,
+                confidence_level=thought_data.confidence_level,
+                timestamp=thought_data.timestamp
+            )
 
-        # Default session file
-        self.current_session_file = self.storage_dir / "current_session.json"
-        self.lock_file = self.storage_dir / "current_session.lock"
+            thought_model.tags = [self._get_or_create(session, TagModel, name) for name in thought_data.tags]
+            thought_model.axioms_used = [self._get_or_create(session, AxiomModel, name) for name in thought_data.axioms_used]
+            thought_model.assumptions_challenged = [self._get_or_create(session, AssumptionModel, name) for name in thought_data.assumptions_challenged]
+            thought_model.supporting_evidence = [self._get_or_create(session, EvidenceModel, name) for name in thought_data.supporting_evidence]
+            thought_model.counter_arguments = [self._get_or_create(session, CounterArgumentModel, name) for name in thought_data.counter_arguments]
 
-        # Thread safety
-        self._lock = threading.RLock()
-        self.thought_history: List[ThoughtData] = []
-
-        # Load existing session if available
-        self._load_session()
-
-    def _load_session(self) -> None:
-        """Load thought history from the current session file if it exists."""
-        with self._lock:
-            # Use the utility function to handle loading with proper error handling
-            self.thought_history = load_thoughts_from_file(self.current_session_file, self.lock_file)
-
-    def _save_session(self) -> None:
-        """Save the current thought history to the session file."""
-        # Use thread lock to ensure consistent data
-        with self._lock:
-            # Use utility functions to prepare and save thoughts
-            thoughts_with_ids = prepare_thoughts_for_serialization(self.thought_history)
-        
-        # Save to file with proper locking
-        save_thoughts_to_file(self.current_session_file, thoughts_with_ids, self.lock_file)
-
-    def add_thought(self, thought: ThoughtData) -> None:
-        """Add a thought to the history and save the session.
-
-        Args:
-            thought: The thought data to add
-        """
-        with self._lock:
-            self.thought_history.append(thought)
-        self._save_session()
+            session.add(thought_model)
+            session.commit()
+        logger.info(f"Added thought #{thought_data.thought_number} to the database.")
 
     def get_all_thoughts(self) -> List[ThoughtData]:
-        """Get all thoughts in the current session.
-
-        Returns:
-            List[ThoughtData]: All thoughts in the current session
-        """
-        with self._lock:
-            # Return a copy to avoid external modification
-            return list(self.thought_history)
-
-    def get_thoughts_by_stage(self, stage: ThoughtStage) -> List[ThoughtData]:
-        """Get all thoughts in a specific stage.
-
-        Args:
-            stage: The thinking stage to filter by
-
-        Returns:
-            List[ThoughtData]: Thoughts in the specified stage
-        """
-        with self._lock:
-            return [t for t in self.thought_history if t.stage == stage]
+        with self.Session() as session:
+            all_thought_models = session.query(ThoughtModel).order_by(ThoughtModel.thought_number).all()
+            result = []
+            for tm in all_thought_models:
+                thought_data = ThoughtData(
+                    id=tm.id,
+                    thought=tm.thought,
+                    thought_number=tm.thought_number,
+                    total_thoughts=tm.total_thoughts,
+                    next_thought_needed=tm.next_thought_needed,
+                    stage=tm.stage,
+                    confidence_level=tm.confidence_level,
+                    timestamp=tm.timestamp,
+                    tags=[tag.name for tag in tm.tags],
+                    axioms_used=[axiom.name for axiom in tm.axioms_used],
+                    assumptions_challenged=[assumption.name for assumption in tm.assumptions_challenged],
+                    supporting_evidence=[evidence.name for evidence in tm.supporting_evidence],
+                    counter_arguments=[counter.name for counter in tm.counter_arguments]
+                )
+                result.append(thought_data)
+        return result
 
     def clear_history(self) -> None:
-        """Clear the thought history and save the empty session."""
-        with self._lock:
-            self.thought_history.clear()
-        self._save_session()
+        """Clear all thought data from the database."""
+        logger.info("Clearing all thought data from the database.")
+        with self.Session() as session:
+            # Delete in correct order to respect foreign key constraints
+            session.execute(thought_tags_association.delete())
+            session.execute(thought_axioms_association.delete())
+            session.execute(thought_assumptions_association.delete())
+            session.execute(thought_evidence_association.delete())
+            session.execute(thought_counters_association.delete())
+            session.query(ThoughtModel).delete()
+            session.query(TagModel).delete()
+            session.query(AxiomModel).delete()
+            session.query(AssumptionModel).delete()
+            session.query(EvidenceModel).delete()
+            session.query(CounterArgumentModel).delete()
+            session.commit()
+        logger.info("Database cleared.")
 
     def export_session(self, file_path: str) -> None:
-        """Export the current session to a file.
+        logger.info(f"Starting session export to {file_path}")
+        all_thoughts = self.get_all_thoughts()
+        thoughts_as_dicts = [t.to_dict(include_id=True) for t in all_thoughts]
+        
+        export_data = {
+            "exportedAt": datetime.now().isoformat(),
+            "thoughts": thoughts_as_dicts
+        }
 
-        Args:
-            file_path: Path to save the exported session
-        """
-        with self._lock:
-            # Use utility function to prepare thoughts for serialization
-            thoughts_with_ids = prepare_thoughts_for_serialization(self.thought_history)
+        try:
+            p = Path(file_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Ensured directory exists: {p.parent}")
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
             
-            # Create export-specific metadata
-            metadata = {
-                "exportedAt": datetime.now().isoformat(),
-                "metadata": {
-                    "totalThoughts": len(self.thought_history),
-                    "stages": {
-                        stage.value: len([t for t in self.thought_history if t.stage == stage])
-                        for stage in ThoughtStage
-                    }
-                }
-            }
-        
-        # Convert string path to Path object for compatibility with utility
-        file_path_obj = Path(file_path)
-        lock_file = file_path_obj.with_suffix('.lock')
-        
-        # Use utility function to save with proper locking
-        save_thoughts_to_file(file_path_obj, thoughts_with_ids, lock_file, metadata)
+            logger.info(f"Session successfully exported to {file_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to export session to {file_path}: {e}")
+            raise
 
     def import_session(self, file_path: str) -> None:
-        """Import a session from a file.
-
-        Args:
-            file_path: Path to the file to import
-
-        Raises:
-            FileNotFoundError: If the file doesn't exist
-            json.JSONDecodeError: If the file is not valid JSON
-            KeyError: If the file doesn't contain valid thought data
-        """
-        # Convert string path to Path object for compatibility with utility
-        file_path_obj = Path(file_path)
-        lock_file = file_path_obj.with_suffix('.lock')
+        logger.info(f"Starting session import from {file_path}")
         
-        # Use utility function to load thoughts with proper error handling
-        thoughts = load_thoughts_from_file(file_path_obj, lock_file)
+        p = Path(file_path)
+        if not p.exists():
+            logger.error(f"Import file not found at {file_path}")
+            raise FileNotFoundError(f"Import file not found: {file_path}")
         
-        with self._lock:
-            self.thought_history = thoughts
+        if not p.is_file():
+            logger.error(f"Import path is not a file: {file_path}")
+            raise ValueError(f"Import path is not a file: {file_path}")
 
-        self._save_session()
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                import_data = json.load(f)
+            
+            thoughts_to_import = import_data.get("thoughts", [])
+            
+            self.clear_history() # Clear existing data before import
+
+            for thought_dict in thoughts_to_import:
+                thought_data = ThoughtData.from_dict(thought_dict)
+                self.add_thought(thought_data)
+            
+            logger.info(f"Successfully imported {len(thoughts_to_import)} thoughts from {file_path}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON from {file_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to import session from {file_path}: {e}")
+            raise

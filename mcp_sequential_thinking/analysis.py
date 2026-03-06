@@ -1,3 +1,9 @@
+"""Analysis module for the sequential thinking process.
+
+Provides ThoughtAnalyzer with methods for finding related thoughts,
+generating summaries, content similarity analysis, and contextual prompts.
+"""
+
 from typing import List, Dict, Any
 from collections import Counter
 from datetime import datetime
@@ -19,13 +25,15 @@ class ThoughtAnalyzer:
                              max_results: int = 3) -> List[ThoughtData]:
         """Find thoughts related to the current thought.
 
+        Searches by same-stage membership first, then by shared tags.
+
         Args:
-            current_thought: The current thought to find related thoughts for
-            all_thoughts: All available thoughts to search through
-            max_results: Maximum number of related thoughts to return
+            current_thought: The current thought to find related thoughts for.
+            all_thoughts: All available thoughts to search through.
+            max_results: Maximum number of related thoughts to return.
 
         Returns:
-            List[ThoughtData]: Related thoughts, sorted by relevance
+            List[ThoughtData]: Related thoughts, sorted by relevance.
         """
         # First, find thoughts in the same stage
         same_stage = [t for t in all_thoughts
@@ -79,10 +87,10 @@ class ThoughtAnalyzer:
         """Generate a summary of the thinking process.
 
         Args:
-            thoughts: List of thoughts to summarize
+            thoughts: List of thoughts to summarize.
 
         Returns:
-            Dict[str, Any]: Summary data
+            Dict[str, Any]: Summary data including stage counts, timeline, and top tags.
         """
         if not thoughts:
             return {"summary": "No thoughts recorded yet"}
@@ -90,76 +98,60 @@ class ThoughtAnalyzer:
         # Group thoughts by stage
         stages = {}
         for thought in thoughts:
-            if thought.stage.value not in stages:
-                stages[thought.stage.value] = []
-            stages[thought.stage.value].append(thought)
+            if thought.stage not in stages:
+                stages[thought.stage] = []
+            stages[thought.stage].append(thought)
 
-        # Count tags - using a more readable approach with explicit steps
-        # Collect all tags from all thoughts
+        # Count tags
         all_tags = []
         for thought in thoughts:
             all_tags.extend(thought.tags)
-
-        # Count occurrences of each tag
         tag_counts = Counter(all_tags)
-        
-        # Get the 5 most common tags
         top_tags = tag_counts.most_common(5)
 
-        # Create summary
         try:
             # Safely calculate max total thoughts to avoid division by zero
-            max_total = 0
-            if thoughts:
-                max_total = max((t.total_thoughts for t in thoughts), default=0)
-
-            # Calculate percent complete safely
-            percent_complete = 0
-            if max_total > 0:
-                percent_complete = (len(thoughts) / max_total) * 100
+            max_total = max((t.total_thoughts for t in thoughts), default=0)
+            percent_complete = (len(thoughts) / max_total) * 100 if max_total > 0 else 0
 
             logger.debug(f"Calculating completion: {len(thoughts)}/{max_total} = {percent_complete}%")
 
-            # Build the summary dictionary with more readable and
-            # maintainable list comprehensions
-            
             # Count thoughts by stage
             stage_counts = {
-                stage: len(thoughts_list) 
+                stage: len(thoughts_list)
                 for stage, thoughts_list in stages.items()
             }
-            
+
             # Create timeline entries
             sorted_thoughts = sorted(thoughts, key=lambda x: x.thought_number)
-            timeline_entries = []
-            for t in sorted_thoughts:
-                timeline_entries.append({
-                    "number": t.thought_number,
-                    "stage": t.stage.value
-                })
-            
+            timeline_entries = [
+                {"number": t.thought_number, "stage": t.stage}
+                for t in sorted_thoughts
+            ]
+
             # Create top tags entries
-            top_tags_entries = []
-            for tag, count in top_tags:
-                top_tags_entries.append({
-                    "tag": tag,
-                    "count": count
-                })
-            
-            # Check if all stages are represented
-            all_stages_present = all(
-                stage.value in stages 
-                for stage in ThoughtStage
+            top_tags_entries = [
+                {"tag": tag, "count": count}
+                for tag, count in top_tags
+            ]
+
+            # Check if all predefined stages are represented
+            all_predefined_stages_present = all(
+                stage in stages
+                for stage in ThoughtStage.ALL
             )
-            
-            # Assemble the final summary
+
+            # Collect all unique stages used (including custom ones)
+            unique_stages = list(stages.keys())
+
             summary = {
                 "totalThoughts": len(thoughts),
                 "stages": stage_counts,
+                "uniqueStages": unique_stages,
                 "timeline": timeline_entries,
                 "topTags": top_tags_entries,
                 "completionStatus": {
-                    "hasAllStages": all_stages_present,
+                    "hasAllPredefinedStages": all_predefined_stages_present,
                     "percentComplete": percent_complete
                 }
             }
@@ -174,63 +166,107 @@ class ThoughtAnalyzer:
 
     @staticmethod
     def _generate_contextual_prompt(thought: ThoughtData, all_thoughts: List[ThoughtData]) -> str:
-        """
-        Generates a contextual prompt based on the current thought and stage.
-        (Private helper method)
+        """Generate a contextual prompt based on the current thought and stage.
+
+        For predefined stages, returns a tailored prompt. For custom stages,
+        returns a generic but helpful prompt.
+
+        Args:
+            thought: The current thought.
+            all_thoughts: All thoughts in the session for context.
+
+        Returns:
+            str: A prompt string ready to be sent to an LLM.
         """
         stage = thought.stage
         content = thought.thought
-        
-        # Default prompt
-        prompt_text = "I have just completed a thought in the '{}' stage. My last thought is: '{}'.\n\nWhat would be a logical next step?".format(stage.value, content)
+
+        # Default prompt for unknown/custom stages
+        prompt_text = (
+            f"I have just completed a thought in the '{stage}' stage. "
+            f"My last thought is: '{content}'.\n\n"
+            f"What would be a logical next step?"
+        )
 
         if stage == ThoughtStage.PROBLEM_DEFINITION:
-            prompt_text = "I have just completed a thought in the 'Problem Definition' stage. My last thought is: '{}'.\n\nBased on this problem definition, please help me brainstorm the requirements. What key aspects should I consider? What are the potential ambiguities I need to clarify?".format(content)
+            prompt_text = (
+                f"I have just completed a thought in the 'Problem Definition' stage. "
+                f"My last thought is: '{content}'.\n\n"
+                f"Based on this problem definition, please help me brainstorm the requirements. "
+                f"What key aspects should I consider? What are the potential ambiguities I need to clarify?"
+            )
         elif stage == ThoughtStage.REQUIREMENT_ANALYSIS:
             problem_thoughts = [t for t in all_thoughts if t.stage == ThoughtStage.PROBLEM_DEFINITION]
             if problem_thoughts:
                 last_problem = problem_thoughts[-1].thought
-                prompt_text = "I have finished defining the problem, which is: '{}'.\n\nI am now starting the 'Requirement Analysis' stage. My first thought is: '{}'.\n\nPlease help me plan the requirement analysis. What key aspects should I consider? Who are the stakeholders I should consult?".format(last_problem, content)
+                prompt_text = (
+                    f"I have finished defining the problem, which is: '{last_problem}'.\n\n"
+                    f"I am now starting the 'Requirement Analysis' stage. My first thought is: '{content}'.\n\n"
+                    f"Please help me plan the requirement analysis. What key aspects should I consider?"
+                )
             else:
-                 prompt_text = "I have just started the 'Requirement Analysis' stage. My first thought is: '{}'.\n\nBased on my first requirement, please help me brainstorm other related requirements.".format(content)
+                prompt_text = (
+                    f"I have just started the 'Requirement Analysis' stage. "
+                    f"My first thought is: '{content}'.\n\n"
+                    f"Based on my first requirement, please help me brainstorm other related requirements."
+                )
         elif stage == ThoughtStage.TECHNICAL_DESIGN:
-            prompt_text = "I have completed the requirement analysis. My last thought on requirements is: '{}'.\n\nNow, entering the 'Technical Design' stage, please help me create a high-level technical design. What are the key components, modules, or services? What technologies would you recommend and why?".format(content)
+            prompt_text = (
+                f"I have completed the requirement analysis. My last thought on requirements is: '{content}'.\n\n"
+                f"Now, entering the 'Technical Design' stage, please help me create a high-level technical design. "
+                f"What are the key components, modules, or services? What technologies would you recommend and why?"
+            )
         elif stage == ThoughtStage.IMPLEMENTATION:
-            prompt_text = "The technical design is complete. My last design thought is: '{}'.\n\nI am now starting the 'Implementation' stage. Please help me break this down into smaller, manageable tasks. Can you suggest a file structure and some boilerplate code for the main components?".format(content)
+            prompt_text = (
+                f"The technical design is complete. My last design thought is: '{content}'.\n\n"
+                f"I am now starting the 'Implementation' stage. Please help me break this down into "
+                f"smaller, manageable tasks. Can you suggest a file structure and some boilerplate code?"
+            )
         elif stage == ThoughtStage.TESTING_AND_REFACTORING:
-            prompt_text = "I have finished a part of the implementation. My last thought is: '{}'.\n\nNow, in the 'Testing and Refactoring' stage, what kind of tests (unit, integration, e2e) should I write to ensure its quality? Please provide some test case ideas.".format(content)
+            prompt_text = (
+                f"I have finished a part of the implementation. My last thought is: '{content}'.\n\n"
+                f"Now, in the 'Testing and Refactoring' stage, what kind of tests (unit, integration, e2e) "
+                f"should I write to ensure its quality? Please provide some test case ideas."
+            )
         elif stage == ThoughtStage.INTEGRATION_AND_DEPLOYMENT:
-            prompt_text = "I have finished testing and refactoring. My last thought was: '{}'.\n\nI am now entering the 'Integration and Deployment' stage. What are the next steps? Should I be thinking about documentation, environment configuration, or CI/CD pipelines?".format(content)
-        
+            prompt_text = (
+                f"I have finished testing and refactoring. My last thought was: '{content}'.\n\n"
+                f"I am now entering the 'Integration and Deployment' stage. What are the next steps? "
+                f"Should I be thinking about documentation, environment configuration, or CI/CD pipelines?"
+            )
+
         return prompt_text
 
     @staticmethod
-    def analyze_thought(thought: ThoughtData, all_thoughts: List[ThoughtData], lang: str = 'en', top_n: int = 3) -> Dict[str, Any]:
+    def analyze_thought(thought: ThoughtData, all_thoughts: List[ThoughtData],
+                        lang: str = 'en', top_n: int = 3) -> Dict[str, Any]:
         """Analyze a single thought in the context of all thoughts.
 
+        Performs tag-based related thought search, semantic similarity analysis
+        (via TF-IDF), and generates contextual prompts for new stages.
+
         Args:
-            thought: The thought to analyze
-            all_thoughts: All available thoughts for context
+            thought: The thought to analyze.
+            all_thoughts: All available thoughts for context.
             lang: The language of the thoughts ('en' or 'zh').
             top_n: The number of semantic recommendations to return.
 
         Returns:
             Dict[str, Any]: Analysis results including semantic recommendations.
         """
-        # --- Existing Analysis (Tags, Stage, etc.) ---
         related_thoughts = ThoughtAnalyzer.find_related_thoughts(thought, all_thoughts)
         same_stage_thoughts = [t for t in all_thoughts if t.stage == thought.stage]
         is_first_in_stage = len(same_stage_thoughts) <= 1
 
         progress = (thought.thought_number / thought.total_thoughts) * 100 if thought.total_thoughts > 0 else 0
 
-        # --- New Semantic (Content-based) Analysis (Feature Flag Enabled) ---
+        # Semantic (content-based) analysis via TF-IDF
         semantic_recommendations = []
         if config.features.semantic_analysis.enabled and len(all_thoughts) > 1:
             try:
                 logger.info(f"Performing semantic analysis for thought #{thought.thought_number} in language '{lang}'")
                 similarity_matrix = AdvancedAnalyzer.calculate_similarity_matrix(all_thoughts, lang=lang)
-                
+
                 current_thought_index = -1
                 for i, t in enumerate(all_thoughts):
                     if t.id == thought.id:
@@ -240,7 +276,7 @@ class ThoughtAnalyzer:
                 if current_thought_index != -1:
                     sim_scores = list(enumerate(similarity_matrix[current_thought_index]))
                     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-                    
+
                     for i, score in sim_scores:
                         if len(semantic_recommendations) >= top_n:
                             break
@@ -248,22 +284,23 @@ class ThoughtAnalyzer:
                             recommended_thought = all_thoughts[i]
                             semantic_recommendations.append({
                                 "thoughtNumber": recommended_thought.thought_number,
-                                "stage": recommended_thought.stage.value,
-                                "snippet": recommended_thought.thought[:100] + "..." if len(recommended_thought.thought) > 100 else recommended_thought.thought,
-                                "similarity": score
+                                "stage": recommended_thought.stage,
+                                "snippet": (recommended_thought.thought[:100] + "..."
+                                           if len(recommended_thought.thought) > 100
+                                           else recommended_thought.thought),
+                                "similarity": float(score)
                             })
             except Exception as e:
                 logger.error(f"Error during semantic analysis: {e}")
-                pass
 
-        # --- Combine and Return Analysis ---
+        # Build analysis result
         analysis_result = {
             "thoughtAnalysis": {
                 "currentThought": {
                     "thoughtNumber": thought.thought_number,
                     "totalThoughts": thought.total_thoughts,
                     "nextThoughtNeeded": thought.next_thought_needed,
-                    "stage": thought.stage.value,
+                    "stage": thought.stage,
                     "tags": thought.tags,
                     "axiomsUsed": thought.axioms_used,
                     "assumptionsChallenged": thought.assumptions_challenged,
@@ -277,74 +314,28 @@ class ThoughtAnalyzer:
                     "relatedThoughtSummaries": [
                         {
                             "thoughtNumber": t.thought_number,
-                            "stage": t.stage.value,
-                            "snippet": t.thought[:100] + "..." if len(t.thought) > 100 else t.thought
+                            "stage": t.stage,
+                            "snippet": (t.thought[:100] + "..."
+                                       if len(t.thought) > 100
+                                       else t.thought)
                         } for t in related_thoughts
                     ],
-                    "semantic_recommendations": semantic_recommendations,
+                    "semanticRecommendations": semantic_recommendations,
                     "progress": progress,
-                    "isFirstInStage": is_first_in_stage
+                    "isFirstInStage": is_first_in_stage,
+                    "suggestedPrompt": None
                 },
                 "context": {
                     "thoughtHistoryLength": len(all_thoughts),
-                    "currentStage": thought.stage.value
+                    "currentStage": thought.stage
                 }
             }
         }
 
-        # --- Automatic Prompt Generation on New Stage Entry (Feature Flag Enabled) ---
-        suggested_prompt = None
+        # Automatic prompt generation on new stage entry
         if config.features.automatic_prompts.enabled and is_first_in_stage and thought.thought_number > 1:
-            suggested_prompt = ThoughtAnalyzer._generate_contextual_prompt(thought, all_thoughts)
-
-        analysis_result["thoughtAnalysis"]["analysis"]["suggested_prompt"] = suggested_prompt
+            analysis_result["thoughtAnalysis"]["analysis"]["suggestedPrompt"] = (
+                ThoughtAnalyzer._generate_contextual_prompt(thought, all_thoughts)
+            )
 
         return analysis_result
-
-    @staticmethod
-    def get_similarity_analysis(thoughts: List[ThoughtData], threshold: float = 0.5, lang: str = 'en') -> Dict[str, Any]:
-        """
-        Performs a textual similarity analysis on a list of thoughts.
-
-        Args:
-            thoughts: A list of ThoughtData objects.
-            threshold: The similarity threshold to consider pairs as "similar".
-            lang: Language of the thoughts ('en' for English, 'zh' for Chinese).
-
-        Returns:
-            A dictionary containing the similarity analysis, including the similarity matrix
-            and a list of highly similar thought pairs.
-        """
-        if not thoughts or len(thoughts) < 2:
-            return {"message": "Not enough thoughts to perform similarity analysis."}
-
-        similarity_matrix = AdvancedAnalyzer.calculate_similarity_matrix(thoughts, lang=lang)
-
-        # Find pairs of thoughts with similarity above the threshold
-        similar_pairs = []
-        # Use numpy to find indices where similarity is above the threshold
-        # We only need to check the upper triangle of the matrix (k=1)
-        for i, j in zip(*np.where(similarity_matrix > threshold)):
-            if i < j: # Avoid duplicate pairs and self-similarity
-                pair_data = {
-                    "thought_1": {
-                        "thought_number": thoughts[i].thought_number,
-                        "thought": thoughts[i].thought,
-                    },
-                    "thought_2": {
-                        "thought_number": thoughts[j].thought_number,
-                        "thought": thoughts[j].thought,
-                    },
-                    "similarity": similarity_matrix[i, j]
-                }
-                similar_pairs.append(pair_data)
-        
-        # Sort pairs by similarity score in descending order
-        similar_pairs.sort(key=lambda x: x["similarity"], reverse=True)
-
-        return {
-            "similarity_analysis": {
-                "similarity_matrix": similarity_matrix.tolist(),
-                "similar_pairs": similar_pairs
-            }
-        }

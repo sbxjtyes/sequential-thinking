@@ -12,7 +12,7 @@ A Model Context Protocol (MCP) server that facilitates structured, progressive t
 
 ## Features
 
-- **Structured Thinking Framework**: Organizes thoughts through software development stages (Problem Definition, Requirement Analysis, Technical Design, Implementation, Testing and Refactoring, Integration and Deployment)
+- **Structured Thinking Framework**: Organizes thoughts through customizable stages. Comes with predefined software development stages (Problem Definition, Requirement Analysis, Technical Design, etc.), but accepts **any string** as a stage name for full flexibility across use cases (research, business analysis, creative writing, etc.)
 - **Thought Tracking**: Records and manages sequential thoughts with metadata
 - **Related Thought Analysis**: Identifies connections between similar thoughts
 - **Progress Monitoring**: Tracks your position in the overall thinking sequence
@@ -31,9 +31,9 @@ A Model Context Protocol (MCP) server that facilitates structured, progressive t
 ## Key Technologies
 
 - **Pydantic**: For data validation and serialization
-- **Portalocker**: For thread-safe file access
+- **SQLAlchemy**: For database-backed persistent storage
 - **FastMCP**: For Model Context Protocol integration
-- **Rich**: For enhanced console output
+- **scikit-learn + jieba**: For TF-IDF semantic similarity analysis (Chinese & English)
 - **PyYAML**: For configuration management
 
 ## Project Structure
@@ -41,15 +41,15 @@ A Model Context Protocol (MCP) server that facilitates structured, progressive t
 ```
 mcp-sequential-thinking/
 ├── mcp_sequential_thinking/
-│   ├── server.py       # Main server implementation and MCP tools
-│   ├── models.py       # Data models with Pydantic validation
-│   ├── storage.py      # Thread-safe persistence layer
-│   ├── storage_utils.py # Shared utilities for storage operations
-│   ├── analysis.py     # Thought analysis and pattern detection
-│   ├── testing.py      # Test utilities and helper functions
-│   ├── utils.py        # Common utilities and helper functions
-│   ├── logging_conf.py # Centralized logging configuration
-│   └── __init__.py     # Package initialization
+│   ├── server.py           # Main server implementation and MCP tools
+│   ├── models.py           # Data models with Pydantic validation
+│   ├── storage.py          # SQLAlchemy-backed persistence layer
+│   ├── analysis.py         # Thought analysis and pattern detection
+│   ├── advanced_analysis.py # TF-IDF semantic similarity engine
+│   ├── config.py           # Configuration loading from YAML
+│   ├── utils.py            # Common utilities (case conversion)
+│   ├── logging_conf.py     # Centralized logging configuration
+│   └── __init__.py         # Package initialization
 ├── tests/              
 │   ├── test_analysis.py # Tests for analysis functionality
 │   ├── test_models.py   # Tests for data models
@@ -158,7 +158,7 @@ The server maintains a history of thoughts and processes them through a structur
 
 ## Usage Guide
 
-The Sequential Thinking server exposes three main tools:
+The Sequential Thinking server exposes five tools:
 
 ### 1. `process_thought`
 
@@ -166,34 +166,55 @@ Records and analyzes a new thought in your sequential thinking process.
 
 **Parameters:**
 
-- `thought` (string): The content of your thought
-- `thought_number` (integer): Position in your sequence (e.g., 1 for first thought)
-- `total_thoughts` (integer): Expected total thoughts in the sequence
-- `next_thought_needed` (boolean): Whether more thoughts are needed after this one
-- `stage` (string): The thinking stage - must be one of:
-  - "Problem Definition"
+- `thought` (string, required): The content of your thought
+- `thought_number` (integer, required): Position in your sequence (e.g., 1 for first thought)
+- `total_thoughts` (integer, required): Expected total thoughts in the sequence
+- `next_thought_needed` (boolean, required): Whether more thoughts are needed after this one
+- `stage` (string, optional): The thinking stage. **Any string is accepted.** Predefined stages include:
+  - "Problem Definition" (default)
   - "Requirement Analysis"
   - "Technical Design"
   - "Implementation"
   - "Testing and Refactoring"
   - "Integration and Deployment"
+  - Or any custom stage: "Literature Review", "Data Collection", "Market Analysis", etc.
 - `tags` (list of strings, optional): Keywords or categories for your thought
 - `axioms_used` (list of strings, optional): Principles or axioms applied in your thought
 - `assumptions_challenged` (list of strings, optional): Assumptions your thought questions or challenges
+- `confidence_level` (float, optional): Confidence score between 0.0 and 1.0, defaults to 0.5
+- `supporting_evidence` (list of strings, optional): Evidence supporting the thought
+- `counter_arguments` (list of strings, optional): Counter-arguments to consider
+- `lang` (string, optional): Language for analysis ('en' or 'zh'), defaults to config setting
 
 **Example:**
 
 ```python
-# First thought in a 5-thought sequence
+# Minimal call - only 4 required params
 process_thought(
-    thought="The problem of climate change requires analysis of multiple factors including emissions, policy, and technology adoption.",
+    thought="The problem of climate change requires multifaceted analysis.",
+    thought_number=1,
+    total_thoughts=5,
+    next_thought_needed=True
+)
+
+# Full call with optional metadata
+process_thought(
+    thought="The problem of climate change requires analysis of multiple factors.",
     thought_number=1,
     total_thoughts=5,
     next_thought_needed=True,
     stage="Problem Definition",
-    tags=["climate", "global policy", "systems thinking"],
-    axioms_used=["Complex problems require multifaceted solutions"],
-    assumptions_challenged=["Technology alone can solve climate change"]
+    tags=["climate", "global policy"],
+    confidence_level=0.8
+)
+
+# Custom stages for non-software use cases
+process_thought(
+    thought="Reviewing existing literature on neural network pruning techniques.",
+    thought_number=1,
+    total_thoughts=6,
+    next_thought_needed=True,
+    stage="Literature Review"
 )
 ```
 
@@ -230,6 +251,17 @@ Generates a summary of your entire thinking process.
 ### 3. `clear_history`
 
 Resets the thinking process by clearing all recorded thoughts.
+
+### 4. `export_session`
+
+Exports the entire thinking session to a local JSON file for archiving or sharing.
+
+**Parameters:**
+- `file_path` (string): Absolute path for saving the session file
+
+### 5. `import_session`
+
+Imports a previously exported thinking session from a JSON file. Overwrites current session.
 
 ## Practical Applications
 

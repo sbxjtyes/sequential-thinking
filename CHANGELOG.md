@@ -1,5 +1,29 @@
 # Changelog
 
+## Version 0.6.0 (2026-03-07) — Architecture Refactoring
+
+### Breaking Changes
+- **`ThoughtStage`**: Changed from `Enum` to a class with string constants. The `stage` field now accepts **any string**, not just predefined enum values. This enables non-software use cases (research, business, creative writing, etc.). Predefined stages are still available as `ThoughtStage.PROBLEM_DEFINITION`, etc.
+- **`process_thought`**: Parameters `tags`, `axioms_used`, `assumptions_challenged`, `supporting_evidence`, `counter_arguments` are now **Optional** (default: empty list). `confidence_level` default changed from 0.0 to 0.5.
+- **`to_dict`**: Simplified output — the redundant double-conversion (loop + hardcoded override) has been replaced with direct construction.
+
+### Removed
+- **`get_similarity_analysis` tool**: Redundant — `process_thought` already returns semantic recommendations via `semanticRecommendations` in its response.
+- **`suggest_next_step_prompt` prompt**: Redundant — `process_thought` already generates `suggestedPrompt` in its response when entering a new stage.
+- **`debug_environment` tool**: Development-only diagnostic tool, should not be exposed to end users.
+- **`search_exa` tool**: Web search functionality is outside the scope of a "sequential thinking" tool. Should be provided by a dedicated search MCP service.
+- **`testing.py`**: Dead code — hardcoded test stubs previously used via `importlib.util.find_spec('pytest')` detection (removed in v0.5.0).
+- **`storage_utils.py`**: Dead code — file-based storage utilities superseded by SQLAlchemy in `storage.py`, no imports remaining.
+- **`validate()` method on ThoughtData**: Removed legacy no-op method. Pydantic handles validation automatically on construction.
+
+### Changed
+- **`clear_history`**: Changed from destructive `DROP TABLE` + `CREATE TABLE` to proper `DELETE` statements, preserving table schema.
+- **`generate_summary`**: Added `uniqueStages` field to output (lists all stages used, including custom ones). Renamed `hasAllStages` to `hasAllPredefinedStages` for clarity.
+- **`analysis.py`**: `semantic_recommendations` key renamed to camelCase `semanticRecommendations` for API consistency. `suggested_prompt` moved into the `analysis` sub-dict directly instead of being post-assigned.
+- **`storage.py`**: Removed `ThoughtStage` import — stage is now stored and retrieved as plain string without enum conversion.
+- **Tool count**: Reduced from 9 tools to 5 tools (process_thought, generate_summary, clear_history, export_session, import_session).
+
+
 ## Version 0.5.0 (2026-03-07)
 
 ### Fixed

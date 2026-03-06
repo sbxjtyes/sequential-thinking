@@ -1,3 +1,9 @@
+"""MCP server for sequential thinking.
+
+Exposes tools for recording thoughts, generating summaries, managing sessions,
+and performing analysis through the Model Context Protocol (MCP).
+"""
+
 import json
 import os
 import sys
@@ -12,208 +18,201 @@ try:
     from .storage import ThoughtStorage
     from .analysis import ThoughtAnalyzer
     from .logging_conf import configure_logging
+    from .config import config
 except ImportError:
     # When run directly
     from mcp_sequential_thinking.models import ThoughtData, ThoughtStage
     from mcp_sequential_thinking.storage import ThoughtStorage
     from mcp_sequential_thinking.analysis import ThoughtAnalyzer
     from mcp_sequential_thinking.logging_conf import configure_logging
+    from mcp_sequential_thinking.config import config
 
 logger = configure_logging("sequential-thinking.server")
 
 
 mcp = FastMCP("sequential-thinking")
 
-storage_dir = os.environ.get("MCP_STORAGE_DIR", None)
-storage = ThoughtStorage(storage_dir)
+logger.info("--- CREATING ThoughtStorage INSTANCE FROM CONFIG ---")
+# Get project root to resolve relative db path from config
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Construct the absolute path for the database from config
+db_path = os.path.join(project_root, config.storage.path)
+db_url = f"sqlite:///{db_path}"
+storage = ThoughtStorage(db_url=db_url)
+logger.info(f"--- ThoughtStorage INSTANCE CREATED with DB at {db_url} ---")
 
 @mcp.tool()
-def process_thought(thought: str, thought_number: int, total_thoughts: int,
-                    next_thought_needed: bool, stage: str,
-                    tags: Optional[List[str]] = None,
-                    axioms_used: Optional[List[str]] = None,
-                    assumptions_challenged: Optional[List[str]] = None,
-                    ctx: Optional[Context] = None) -> dict:
-    """Add a sequential thought with its metadata.
+def process_thought(
+    thought: str,
+    thought_number: int,
+    total_thoughts: int,
+    next_thought_needed: bool,
+    stage: str = "Problem Definition",
+    tags: Optional[List[str]] = None,
+    axioms_used: Optional[List[str]] = None,
+    assumptions_challenged: Optional[List[str]] = None,
+    confidence_level: float = 0.5,
+    supporting_evidence: Optional[List[str]] = None,
+    counter_arguments: Optional[List[str]] = None,
+    lang: Optional[str] = None,
+    ctx: Optional[Context] = None,
+) -> dict:
+    """
+    记录单个思考节点并返回深度分析结果 | Records a thought with comprehensive analysis.
+
+    这是构建思考序列的核心工具。它会存储思考内容及其元数据，执行语义分析以发现关联思考，
+    计算内容相似度，并自动生成下一步的上下文提示。支持中英文内容分析。
+
+    This is the primary tool for building a thought sequence. It stores the thought and metadata,
+    performs semantic analysis to find related thoughts, calculates content similarity, and
+    automatically generates contextual prompts for the next step.
 
     Args:
-        thought: The content of the thought
-        thought_number: The sequence number of this thought
-        total_thoughts: The total expected thoughts in the sequence
-        next_thought_needed: Whether more thoughts are needed after this one
-        stage: The thinking stage (Problem Definition, Research, Analysis, Synthesis, Conclusion)
-        tags: Optional keywords or categories for the thought
-        axioms_used: Optional list of principles or axioms used in this thought
-        assumptions_challenged: Optional list of assumptions challenged by this thought
-        ctx: Optional MCP context object
+        thought: 思考的主要内容 | The main content of the thought.
+        thought_number: 当前思考的序号（如 1, 2, 3...）| Sequence number of this thought.
+        total_thoughts: 计划的思考总数 | Total number of thoughts planned.
+        next_thought_needed: 是否还需要后续思考 | Whether more thoughts are expected.
+        stage: 思考所属阶段，接受任意字符串。预定义阶段包括 "Problem Definition"、
+               "Requirement Analysis"、"Technical Design"、"Implementation"、
+               "Testing and Refactoring"、"Integration and Deployment"。
+               也支持自定义阶段如 "Literature Review"、"Data Collection" 等。
+               | The thinking stage. Any string is accepted.
+        tags: 用于分类的关键词列表（可选）| Optional list of keywords for categorization.
+        axioms_used: 所依据的原则列表（可选）| Optional list of principles relied upon.
+        assumptions_challenged: 被质疑的假设列表（可选）| Optional list of challenged assumptions.
+        confidence_level: 置信度分数 0.0-1.0，默认 0.5 | Confidence score, defaults to 0.5.
+        supporting_evidence: 支持证据列表（可选）| Optional list of supporting evidence.
+        counter_arguments: 反驳论点列表（可选）| Optional list of counter-arguments.
+        lang: 分析语言 'en'/'zh'，默认使用 config.yaml | Language for analysis, defaults to config.
+        ctx: MCP 上下文对象（用于进度报告）| MCP context for progress reporting.
 
     Returns:
-        dict: Analysis of the processed thought
+        包含思考分析结果的字典 | Dictionary with analysis results.
     """
     try:
-        # Log the request
-        logger.info(f"Processing thought #{thought_number}/{total_thoughts} in stage '{stage}'")
+        # Set language from config if not provided
+        final_lang = lang if lang is not None else config.features.semantic_analysis.default_lang
 
-        # Report progress if context is available
+        logger.info(f"Processing thought #{thought_number}/{total_thoughts} in stage '{stage}' for language '{final_lang}'")
+
         if ctx:
             ctx.report_progress(thought_number - 1, total_thoughts)
 
-        # Convert stage string to enum
-        thought_stage = ThoughtStage.from_string(stage)
-
-        # Create thought data object with defaults for optional fields
         thought_data = ThoughtData(
             thought=thought,
             thought_number=thought_number,
             total_thoughts=total_thoughts,
             next_thought_needed=next_thought_needed,
-            stage=thought_stage,
+            stage=stage,
             tags=tags or [],
             axioms_used=axioms_used or [],
-            assumptions_challenged=assumptions_challenged or []
+            assumptions_challenged=assumptions_challenged or [],
+            confidence_level=confidence_level,
+            supporting_evidence=supporting_evidence or [],
+            counter_arguments=counter_arguments or [],
         )
 
-        # Validate and store
-        thought_data.validate()
         storage.add_thought(thought_data)
 
-        # Get all thoughts for analysis
         all_thoughts = storage.get_all_thoughts()
+        analysis = ThoughtAnalyzer.analyze_thought(thought_data, all_thoughts, lang=final_lang)
 
-        # Analyze the thought
-        analysis = ThoughtAnalyzer.analyze_thought(thought_data, all_thoughts)
-
-        # Log success
         logger.info(f"Successfully processed thought #{thought_number}")
-
         return analysis
     except json.JSONDecodeError as e:
-        # Log JSON parsing error
         logger.error(f"JSON parsing error: {e}")
-        return {
-            "error": f"JSON parsing error: {str(e)}",
-            "status": "failed"
-        }
+        return {"error": f"JSON parsing error: {str(e)}", "status": "failed"}
     except Exception as e:
-        # Log error
-        logger.error(f"Error processing thought: {str(e)}")
-
-        return {
-            "error": str(e),
-            "status": "failed"
-        }
+        logger.error(f"Error processing thought: {e}")
+        return {"error": str(e), "status": "failed"}
 
 @mcp.tool()
 def generate_summary() -> dict:
-    """Generate a summary of the entire thinking process.
+    """
+    生成整个思考过程的全局摘要 | Generates a comprehensive summary of the thinking process.
+
+    提供思考会话的鸟瞰视图，包括思考总数、各阶段分布、时间线以及高频标签统计。
+    适用于快速回顾和理解整体思考脉络。
+
+    Provides a bird's-eye view of the session, including total thoughts count, distribution
+    across stages, timeline, and frequently used tags.
 
     Returns:
-        dict: Summary of the thinking process
+        包含摘要数据的字典 | Dictionary containing comprehensive summary data.
     """
     try:
         logger.info("Generating thinking process summary")
-
-        # Get all thoughts
         all_thoughts = storage.get_all_thoughts()
-
-        # Generate summary
         return ThoughtAnalyzer.generate_summary(all_thoughts)
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parsing error: {e}")
-        return {
-            "error": f"JSON parsing error: {str(e)}",
-            "status": "failed"
-        }
     except Exception as e:
         logger.error(f"Error generating summary: {str(e)}")
-        return {
-            "error": str(e),
-            "status": "failed"
-        }
+        return {"error": str(e), "status": "failed"}
 
 @mcp.tool()
 def clear_history() -> dict:
-    """Clear the thought history.
+    """
+    清除当前会话的所有思考历史 | Deletes all thoughts from the current session.
+
+    ⚠️ 警告：这是一个破坏性且不可逆的操作，将永久删除所有已记录的思考。
+    执行前请确保已导出重要数据。
+
+    ⚠️ Warning: This is a destructive and irreversible operation. Make sure to
+    export important data before executing.
 
     Returns:
-        dict: Status message
+        包含操作状态信息的字典 | Dictionary with operation status message.
     """
     try:
         logger.info("Clearing thought history")
         storage.clear_history()
-        return {"status": "success", "message": "Thought history cleared"}
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parsing error: {e}")
-        return {
-            "error": f"JSON parsing error: {str(e)}",
-            "status": "failed"
-        }
+        return {"status": "success", "message": "Thought history cleared."}
     except Exception as e:
         logger.error(f"Error clearing history: {str(e)}")
-        return {
-            "error": str(e),
-            "status": "failed"
-        }
+        return {"error": str(e), "status": "failed"}
 
 @mcp.tool()
 def export_session(file_path: str) -> dict:
-    """Export the current thinking session to a file.
+    """
+    将整个思考会话导出为本地 JSON 文件 | Exports the entire thinking session to a local JSON file.
+
+    用于保存、归档和分享思考过程。导出的文件包含完整的思考数据、元数据和时间戳，
+    可通过 import_session 工具重新导入。
 
     Args:
-        file_path: Path to save the exported session
+        file_path: 会话文件保存的绝对路径 | Absolute path for saving the session file.
 
     Returns:
-        dict: Status message
+        包含操作状态信息的字典 | Dictionary with operation status message.
     """
     try:
         logger.info(f"Exporting session to {file_path}")
         storage.export_session(file_path)
-        return {
-            "status": "success",
-            "message": f"Session exported to {file_path}"
-        }
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parsing error: {e}")
-        return {
-            "error": f"JSON parsing error: {str(e)}",
-            "status": "failed"
-        }
+        return {"status": "success", "message": f"Session exported to {file_path}"}
     except Exception as e:
         logger.error(f"Error exporting session: {str(e)}")
-        return {
-            "error": str(e),
-            "status": "failed"
-        }
+        return {"error": str(e), "status": "failed"}
 
 @mcp.tool()
 def import_session(file_path: str) -> dict:
-    """Import a thinking session from a file.
+    """
+    从本地 JSON 文件导入思考会话，覆盖当前会话 | Imports a thinking session from a local JSON file.
+
+    从之前导出的 JSON 文件恢复思考会话。此操作会覆盖当前所有思考记录，
+    建议在导入前先导出当前会话以备份。
 
     Args:
-        file_path: Path to the file to import
+        file_path: 要导入的会话文件的绝对路径 | Absolute path to the session file.
 
     Returns:
-        dict: Status message
+        包含操作状态信息的字典 | Dictionary with operation status message.
     """
     try:
         logger.info(f"Importing session from {file_path}")
         storage.import_session(file_path)
-        return {
-            "status": "success",
-            "message": f"Session imported from {file_path}"
-        }
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parsing error: {e}")
-        return {
-            "error": f"JSON parsing error: {str(e)}",
-            "status": "failed"
-        }
+        return {"status": "success", "message": f"Session imported from {file_path}"}
     except Exception as e:
         logger.error(f"Error importing session: {str(e)}")
-        return {
-            "error": str(e),
-            "status": "failed"
-        }
+        return {"error": str(e), "status": "failed"}
 
 
 def main():
