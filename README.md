@@ -12,7 +12,7 @@ A Model Context Protocol (MCP) server that facilitates structured, progressive t
 
 ## Features
 
-- **Structured Thinking Framework**: Organizes thoughts through standard cognitive stages (Problem Definition, Research, Analysis, Synthesis, Conclusion)
+- **Structured Thinking Framework**: Organizes thoughts through software development stages (Problem Definition, Requirement Analysis, Technical Design, Implementation, Testing and Refactoring, Integration and Deployment)
 - **Thought Tracking**: Records and manages sequential thoughts with metadata
 - **Related Thought Analysis**: Identifies connections between similar thoughts
 - **Progress Monitoring**: Tracks your position in the overall thinking sequence
@@ -172,10 +172,11 @@ Records and analyzes a new thought in your sequential thinking process.
 - `next_thought_needed` (boolean): Whether more thoughts are needed after this one
 - `stage` (string): The thinking stage - must be one of:
   - "Problem Definition"
-  - "Research"
-  - "Analysis"
-  - "Synthesis"
-  - "Conclusion"
+  - "Requirement Analysis"
+  - "Technical Design"
+  - "Implementation"
+  - "Testing and Refactoring"
+  - "Integration and Deployment"
 - `tags` (list of strings, optional): Keywords or categories for your thought
 - `axioms_used` (list of strings, optional): Principles or axioms applied in your thought
 - `assumptions_challenged` (list of strings, optional): Assumptions your thought questions or challenges
@@ -205,20 +206,22 @@ Generates a summary of your entire thinking process.
 ```json
 {
   "summary": {
-    "totalThoughts": 5,
+    "totalThoughts": 6,
     "stages": {
       "Problem Definition": 1,
-      "Research": 1,
-      "Analysis": 1,
-      "Synthesis": 1,
-      "Conclusion": 1
+      "Requirement Analysis": 1,
+      "Technical Design": 1,
+      "Implementation": 1,
+      "Testing and Refactoring": 1,
+      "Integration and Deployment": 1
     },
     "timeline": [
       {"number": 1, "stage": "Problem Definition"},
-      {"number": 2, "stage": "Research"},
-      {"number": 3, "stage": "Analysis"},
-      {"number": 4, "stage": "Synthesis"},
-      {"number": 5, "stage": "Conclusion"}
+      {"number": 2, "stage": "Requirement Analysis"},
+      {"number": 3, "stage": "Technical Design"},
+      {"number": 4, "stage": "Implementation"},
+      {"number": 5, "stage": "Testing and Refactoring"},
+      {"number": 6, "stage": "Integration and Deployment"}
     ]
   }
 }

@@ -1,6 +1,15 @@
 # Changelog
 
-## Version 0.5.0 (Unreleased)
+## Version 0.5.0 (2026-03-07)
+
+### Fixed
+- **config.py**: Replaced deprecated `parse_obj` with `model_validate` for Pydantic v2 compatibility
+- **analysis.py**: Removed hardcoded `pytest` detection via `importlib.util.find_spec` — production code no longer imports test utilities
+- **analysis.py**: Removed duplicate `import numpy as np` statement
+
+### Changed
+- **README.md**: Updated thinking stages from outdated 5-stage model (Problem Definition, Research, Analysis, Synthesis, Conclusion) to actual 6-stage software development workflow (Problem Definition, Requirement Analysis, Technical Design, Implementation, Testing and Refactoring, Integration and Deployment)
+- **README.md**: Updated `generate_summary` example output to reflect 6 stages
 
 ### Code Quality Improvements
 
