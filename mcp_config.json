@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+        "sequential-thinking": {
+            "command": "uv",
+            "args": [
+                "--directory",
+                "C:\\Users\\YS\\Desktop\\mcp\\mcp-sequential-thinking",
+                "run",
+                "mcp-sequential-thinking"
+            ],
+            "env": {
+                "PYTHONIOENCODING": "utf-8"
+            }
+        }
+    }
+}
