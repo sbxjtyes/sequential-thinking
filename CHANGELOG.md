@@ -1,5 +1,19 @@
 # Changelog
 
+## Version 0.7.1 (2026-03-07) — Dead Code Cleanup
+
+### Removed
+- `debug_mcp_connection.py`: One-off debug script, not production code.
+- `run_web_server.py`: FastAPI web server using stale APIs (`ThoughtStage.from_string`, removed `get_similarity_analysis`, Exa search). Incompatible with current architecture.
+- `utils.py`: Zero references in codebase (unused case-conversion utilities).
+- `tests/test_models.py`: Stale tests using old `ThoughtStage` enum API (`from_string`, `RESEARCH`, `ANALYSIS`, `CONCLUSION`, `validate()`).
+- `tests/test_analysis.py`: Stale tests using old `ThoughtStage.RESEARCH/SYNTHESIS` enum values.
+- `tests/test_storage.py`: Stale tests using old `ThoughtStorage(dir_path)` file-based API (`thought_history`, `get_thoughts_by_stage`).
+- `tests/__init__.py`: Empty init file, no longer needed.
+
+### Changed
+- Updated `README.md` project structure to reflect file removals and additions.
+
 ## Version 0.7.0 (2026-03-07) — Deep Reasoning Engine
 
 ### Added

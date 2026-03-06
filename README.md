@@ -47,19 +47,13 @@ mcp-sequential-thinking/
 │   ├── analysis.py         # Thought analysis and pattern detection
 │   ├── advanced_analysis.py # TF-IDF semantic similarity engine
 │   ├── config.py           # Configuration loading from YAML
-│   ├── utils.py            # Common utilities (case conversion)
+│   ├── reflection.py       # Automatic reflection engine for reasoning QA
 │   ├── logging_conf.py     # Centralized logging configuration
 │   └── __init__.py         # Package initialization
-├── tests/              
-│   ├── test_analysis.py # Tests for analysis functionality
-│   ├── test_models.py   # Tests for data models
-│   ├── test_storage.py  # Tests for persistence layer
-│   └── __init__.py
 ├── run_server.py       # Server entry point script
-├── debug_mcp_connection.py # Utility for debugging connections
 ├── README.md           # Main documentation
 ├── CHANGELOG.md        # Version history and changes
-├── example.md          # Customization examples
+├── example.md          # Future development plan
 ├── LICENSE             # MIT License
 └── pyproject.toml      # Project configuration and dependencies
 ```
