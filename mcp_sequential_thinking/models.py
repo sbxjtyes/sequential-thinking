@@ -91,7 +91,11 @@ class ThoughtData(BaseModel):
         thought_number: Sequence number of this thought (1-based).
         total_thoughts: Total number of thoughts planned.
         next_thought_needed: Whether more thoughts are expected.
+        thought_type: Cognitive operation type (e.g. 'analysis', 'hypothesis').
         stage: The thinking stage name (any string accepted).
+        parent_thought_id: UUID of parent thought for tree-structured branching.
+        revises_thought_id: UUID of an earlier thought being revised.
+        branch_label: Label for reasoning branches (e.g. 'Plan A').
         tags: Keywords or categories for the thought.
         axioms_used: Principles or axioms relied upon.
         assumptions_challenged: Assumptions being questioned.

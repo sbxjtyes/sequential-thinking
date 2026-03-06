@@ -7,7 +7,6 @@ generating summaries, content similarity analysis, and contextual prompts.
 from typing import List, Dict, Any
 from collections import Counter
 from datetime import datetime
-import numpy as np
 from .models import ThoughtData, ThoughtStage, ThoughtType
 from .logging_conf import configure_logging
 from .advanced_analysis import AdvancedAnalyzer
