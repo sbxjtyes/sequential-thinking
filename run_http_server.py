@@ -18,6 +18,7 @@ Starts the MCP server with HTTP transport for remote access.
 
 import os
 import sys
+import subprocess
 import argparse
 
 # 设置环境变量确保正确的编码 | Set environment variables for proper encoding
@@ -29,8 +30,8 @@ def main():
     """
     启动HTTP模式的MCP服务器 | Start the MCP server in HTTP mode.
     
-    使用uvicorn运行ASGI应用实现HTTP传输。
-    Uses uvicorn to run ASGI application for HTTP transport.
+    使用fastmcp CLI运行HTTP服务器。
+    Uses fastmcp CLI to run HTTP server.
     """
     parser = argparse.ArgumentParser(
         description="启动Sequential Thinking MCP HTTP服务器 | Start Sequential Thinking MCP HTTP Server",
@@ -57,16 +58,9 @@ def main():
     
     args = parser.parse_args()
     
-    # 确保项目目录在路径中 | Ensure project directory is in path
+    # 设置工作目录 | Set working directory
     project_dir = os.path.dirname(os.path.abspath(__file__))
-    if project_dir not in sys.path:
-        sys.path.insert(0, project_dir)
-    
-    # 导入MCP服务器 | Import MCP server
-    from mcp_sequential_thinking.server import mcp
-    from mcp_sequential_thinking.logging_conf import configure_logging
-    
-    logger = configure_logging("sequential-thinking.http_runner")
+    os.chdir(project_dir)
     
     print(f"\n{'='*60}")
     print(f"Sequential Thinking MCP Server - HTTP Mode")
@@ -76,12 +70,22 @@ def main():
     print(f"  MCP端点  | Endpoint: http://{args.host}:{args.port}/mcp")
     print(f"{'='*60}\n")
     
-    logger.info(f"Starting HTTP server on {args.host}:{args.port}")
+    # 指定server.py文件的绝对路径 | Use absolute path to server.py
+    server_file = os.path.join(project_dir, "mcp_sequential_thinking", "server.py")
     
-    # 获取ASGI应用并使用uvicorn运行 | Get ASGI app and run with uvicorn
-    import uvicorn
-    app = mcp.http_app()
-    uvicorn.run(app, host=args.host, port=args.port)
+    # 使用uv运行 | Run with uv
+    cmd = [
+        "uv", "run", "fastmcp", "run", server_file,
+        "--transport", "sse",
+        "--host", args.host,
+        "--port", str(args.port)
+    ]
+    
+    print(f"执行命令 | Command: {' '.join(cmd)}")
+    print()
+    
+    # 运行服务器 | Run server
+    subprocess.run(cmd)
 
 
 if __name__ == "__main__":

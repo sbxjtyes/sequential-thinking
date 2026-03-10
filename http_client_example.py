@@ -167,7 +167,7 @@ async def demo():
     """
     # 配置服务器地址（修改为你的云服务器地址）
     # Configure server URL (change to your cloud server address)
-    SERVER_URL = "http://YOUR_CLOUD_SERVER_IP:8000/mcp"
+    SERVER_URL = "http://106.54.55.203:8000/mcp"
     
     print("=" * 60)
     print("Sequential Thinking MCP - HTTP客户端示例")
