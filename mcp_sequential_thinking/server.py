@@ -225,22 +225,83 @@ def import_session(file_path: str) -> dict:
 
 
 def main():
-    """Entry point for the MCP server."""
-    logger.info("Starting Sequential Thinking MCP server")
+    """
+    MCP服务入口点 | Entry point for the MCP server.
+    
+    支持多种传输模式：
+    - STDIO（默认）：通过标准输入输出通信，适用于本地进程间通信
+    - HTTP：通过HTTP协议通信，适用于远程调用和Web集成
+    - SSE：通过Server-Sent Events通信（旧版，建议使用HTTP代替）
+    
+    Supports multiple transport modes:
+    - STDIO (default): Communication via stdin/stdout, suitable for local IPC
+    - HTTP: Communication via HTTP protocol, suitable for remote calls and web integration
+    - SSE: Communication via Server-Sent Events (legacy, prefer HTTP for new projects)
+    """
+    import argparse
+    
+    # 解析命令行参数 | Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="Sequential Thinking MCP Server - 顺序思考MCP服务器",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例 | Examples:
+  # STDIO模式（默认）| STDIO mode (default)
+  python -m mcp_sequential_thinking.server
+  
+  # HTTP模式，监听所有接口 | HTTP mode, listen on all interfaces
+  python -m mcp_sequential_thinking.server --transport http --host 0.0.0.0 --port 8000
+  
+  # SSE模式（旧版）| SSE mode (legacy)
+  python -m mcp_sequential_thinking.server --transport sse --port 8080
+        """
+    )
+    parser.add_argument(
+        "--transport", "-t",
+        choices=["stdio", "http", "sse"],
+        default="stdio",
+        help="传输模式：stdio（默认）、http（推荐用于远程）、sse（旧版）| Transport mode"
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="HTTP/SSE模式监听地址，默认127.0.0.1（仅本地）。远程部署建议使用0.0.0.0 | Host to bind"
+    )
+    parser.add_argument(
+        "--port", "-p",
+        type=int,
+        default=8000,
+        help="HTTP/SSE模式端口号，默认8000 | Port number for HTTP/SSE mode"
+    )
+    
+    args = parser.parse_args()
+    
+    logger.info(f"Starting Sequential Thinking MCP server with {args.transport} transport")
+    
+    if args.transport in ["http", "sse"]:
+        logger.info(f"Server will be available at http://{args.host}:{args.port}")
+        if args.transport == "http":
+            logger.info(f"MCP endpoint: http://{args.host}:{args.port}/mcp")
 
-    # Ensure UTF-8 encoding for stdin/stdout
-    if hasattr(sys.stdout, 'buffer') and sys.stdout.encoding != 'utf-8':
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-    if hasattr(sys.stdin, 'buffer') and sys.stdin.encoding != 'utf-8':
-        import io
-        sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8', line_buffering=True)
+    # Ensure UTF-8 encoding for stdin/stdout (for STDIO mode)
+    if args.transport == "stdio":
+        if hasattr(sys.stdout, 'buffer') and sys.stdout.encoding != 'utf-8':
+            import io
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
+        if hasattr(sys.stdin, 'buffer') and sys.stdin.encoding != 'utf-8':
+            import io
+            sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8', line_buffering=True)
 
     # Flush stdout to ensure no buffered content remains
     sys.stdout.flush()
 
-    # Run the MCP server
-    mcp.run()
+    # Run the MCP server with specified transport
+    if args.transport == "stdio":
+        mcp.run()
+    elif args.transport == "http":
+        mcp.run(transport="http", host=args.host, port=args.port)
+    elif args.transport == "sse":
+        mcp.run(transport="sse", host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
