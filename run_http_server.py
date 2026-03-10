@@ -28,6 +28,9 @@ os.environ['PYTHONUNBUFFERED'] = '1'
 def main():
     """
     启动HTTP模式的MCP服务器 | Start the MCP server in HTTP mode.
+    
+    使用uvicorn运行ASGI应用实现HTTP传输。
+    Uses uvicorn to run ASGI application for HTTP transport.
     """
     parser = argparse.ArgumentParser(
         description="启动Sequential Thinking MCP HTTP服务器 | Start Sequential Thinking MCP HTTP Server",
@@ -59,7 +62,7 @@ def main():
     if project_dir not in sys.path:
         sys.path.insert(0, project_dir)
     
-    # 导入并启动服务器 | Import and start the server
+    # 导入MCP服务器 | Import MCP server
     from mcp_sequential_thinking.server import mcp
     from mcp_sequential_thinking.logging_conf import configure_logging
     
@@ -75,8 +78,10 @@ def main():
     
     logger.info(f"Starting HTTP server on {args.host}:{args.port}")
     
-    # 启动HTTP服务器 | Start HTTP server
-    mcp.run(transport="http", host=args.host, port=args.port)
+    # 获取ASGI应用并使用uvicorn运行 | Get ASGI app and run with uvicorn
+    import uvicorn
+    app = mcp.http_app()
+    uvicorn.run(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,24 @@
+# Sequential Thinking MCP Server Dependencies
+# 顺序思考MCP服务器依赖
+
+# MCP框架 | MCP Framework
+fastmcp
+
+# ASGI服务器 | ASGI Server
+uvicorn
+
+# 数据验证 | Data Validation
+pydantic
+
+# 终端美化 | Terminal Formatting
+rich
+
+# 配置文件解析 | Configuration Parsing
+pyyaml
+
+# 语义分析依赖 | Semantic Analysis Dependencies
+scikit-learn
+numpy
+
+# 中文分词 | Chinese Word Segmentation
+jieba
