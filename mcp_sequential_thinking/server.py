@@ -295,13 +295,18 @@ def main():
     # Flush stdout to ensure no buffered content remains
     sys.stdout.flush()
 
+    # Set environment variables for host and port
+    if args.transport in ["http", "sse"]:
+        os.environ['FASTMCP_HOST'] = args.host
+        os.environ['FASTMCP_PORT'] = str(args.port)
+
     # Run the MCP server with specified transport
     if args.transport == "stdio":
         mcp.run()
     elif args.transport == "http":
-        mcp.run(transport="http", host=args.host, port=args.port)
+        mcp.run(transport="streamable-http")
     elif args.transport == "sse":
-        mcp.run(transport="sse", host=args.host, port=args.port)
+        mcp.run(transport="sse")
 
 
 if __name__ == "__main__":
