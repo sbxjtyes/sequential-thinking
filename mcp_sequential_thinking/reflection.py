@@ -1,8 +1,8 @@
 """Automatic reflection engine for reasoning quality assurance.
 
 Analyzes the reasoning chain patterns and generates reflection prompts
-to guide the LLM toward more rigorous, self-aware thinking. Inspired by
-the Reflexion framework and Claude's extended thinking approach.
+to guide the LLM toward more rigorous, self-aware thinking. Aligned with
+human cognition: divergent/convergent balance, logical rigor, and metacognition.
 """
 
 from typing import List, Optional, Dict, Any
@@ -15,15 +15,20 @@ logger = configure_logging("sequential-thinking.reflection")
 class ReflectionEngine:
     """Generates reflection prompts based on reasoning chain patterns.
 
-    The engine monitors the sequence of thoughts and detects patterns that
-    suggest the reasoning might benefit from a different cognitive approach.
-    It does NOT modify thoughts — it only suggests reflection points.
+    Monitors the sequence of thoughts and detects patterns that suggest
+    the reasoning might benefit from a different cognitive approach.
+    Encourages human-like thinking: divergence, convergence, critique,
+    analogy, and metacognition.
     """
 
     # Configurable thresholds
     SAME_TYPE_STREAK_THRESHOLD = 3
     NO_CRITIQUE_THRESHOLD = 5
     CONFIDENCE_DROP_THRESHOLD = 0.3
+    DIVERGENCE_WITHOUT_CONVERGENCE_THRESHOLD = 4  # Too many ideas, no selection
+    CONVERGENCE_WITHOUT_DIVERGENCE_THRESHOLD = 4  # Too rigid, no exploration
+    NO_METACOGNITION_THRESHOLD = 8  # Long chain without stepping back
+    NO_ANALOGY_SUGGEST_THRESHOLD = 6  # Complex problem, suggest analogy
 
     @staticmethod
     def generate_reflection(
@@ -71,17 +76,34 @@ class ReflectionEngine:
             ReflectionEngine._check_revision_target(current_thought, all_thoughts, lang)
         )
 
+        # --- Check 6: Divergence/convergence balance (human cognition) ---
+        prompts.extend(
+            ReflectionEngine._check_divergence_convergence_balance(all_thoughts, lang)
+        )
+
+        # --- Check 7: Missing metacognition ---
+        prompts.extend(
+            ReflectionEngine._check_missing_metacognition(all_thoughts, lang)
+        )
+
+        # --- Check 8: Suggest analogy for complex problems ---
+        prompts.extend(
+            ReflectionEngine._check_suggest_analogy(all_thoughts, lang)
+        )
+
         if not prompts:
             return None
 
-        # Build reasoning graph statistics
+        # Build reasoning graph statistics with cognitive balance
         type_distribution = ReflectionEngine._get_type_distribution(all_thoughts)
+        cognitive_balance = ReflectionEngine._get_cognitive_balance(all_thoughts)
 
         return {
             "hasReflection": True,
             "reflectionPrompts": prompts,
             "reasoningHealth": {
                 "typeDistribution": type_distribution,
+                "cognitiveBalance": cognitive_balance,
                 "totalThoughts": len(all_thoughts),
                 "branchCount": len(set(
                     t.branch_label for t in all_thoughts if t.branch_label
@@ -108,14 +130,14 @@ class ReflectionEngine:
             if lang == "zh":
                 return [
                     f"⚠️ 你已连续进行了 {threshold} 次「{thought_type}」操作。"
-                    f"考虑切换认知模式——是否需要验证(verification)、"
-                    f"反思(critique)或分解(decomposition)？"
+                    f"人脑思考需要模式切换——考虑发散(divergence)、批判(critique)、"
+                    f"验证(verification)或类比(analogy)？"
                 ]
             else:
                 return [
                     f"⚠️ You've performed {threshold} consecutive '{thought_type}' "
-                    f"operations. Consider switching cognitive modes — "
-                    f"do you need verification, critique, or decomposition?"
+                    f"operations. Human thinking benefits from mode switching — "
+                    f"consider divergence, critique, verification, or analogy?"
                 ]
         return []
 
@@ -229,6 +251,109 @@ class ReflectionEngine:
                     f"in history. Please verify the revises_thought_id."
                 ]
         return []
+
+    @staticmethod
+    def _check_divergence_convergence_balance(
+        all_thoughts: List[ThoughtData], lang: str
+    ) -> List[str]:
+        """Detect imbalance between divergent and convergent thinking."""
+        if len(all_thoughts) < 4:
+            return []
+
+        recent = all_thoughts[-ReflectionEngine.DIVERGENCE_WITHOUT_CONVERGENCE_THRESHOLD:]
+        divergent_count = sum(1 for t in recent if t.thought_type in ThoughtType.DIVERGENT_TYPES)
+        convergent_count = sum(1 for t in recent if t.thought_type in ThoughtType.CONVERGENT_TYPES)
+
+        # Too much divergence: many ideas, no selection
+        if divergent_count >= 3 and convergent_count == 0:
+            if lang == "zh":
+                return [
+                    "💡 发散思维已产生不少想法。建议进入收敛阶段："
+                    "用 convergence 或 synthesis 做选择，或 critique 筛选优劣。"
+                ]
+            else:
+                return [
+                    "💡 You've diverged with many ideas. Consider converging: "
+                    "use convergence or synthesis to select, or critique to filter."
+                ]
+
+        # Too much convergence: rigid, no exploration
+        recent_conv = all_thoughts[-ReflectionEngine.CONVERGENCE_WITHOUT_DIVERGENCE_THRESHOLD:]
+        no_divergent_in_recent = not any(
+            t.thought_type in ThoughtType.DIVERGENT_TYPES for t in recent_conv
+        )
+        if no_divergent_in_recent and len(recent_conv) >= 3:
+            if lang == "zh":
+                return [
+                    "💡 推理偏收敛，可能遗漏其他可能。建议发散："
+                    "用 divergence 头脑风暴、question 质疑假设、或 analogy 换视角。"
+                ]
+            else:
+                return [
+                    "💡 Reasoning is heavily convergent. Consider diverging: "
+                    "use divergence to brainstorm, question to challenge assumptions, or analogy for fresh perspective."
+                ]
+
+        return []
+
+    @staticmethod
+    def _check_missing_metacognition(
+        all_thoughts: List[ThoughtData], lang: str
+    ) -> List[str]:
+        """Suggest metacognition when reasoning chain is long without stepping back."""
+        threshold = ReflectionEngine.NO_METACOGNITION_THRESHOLD
+        if len(all_thoughts) < threshold:
+            return []
+
+        recent = all_thoughts[-threshold:]
+        has_metacognition = any(t.thought_type == ThoughtType.METACOGNITION for t in recent)
+        if not has_metacognition:
+            if lang == "zh":
+                return [
+                    f"🧠 已连续 {threshold} 个思考未进行元认知。"
+                    "建议用 metacognition 审视：当前推理路径是否合理？有无思维盲区？"
+                ]
+            else:
+                return [
+                    f"🧠 {threshold} thoughts without metacognition. "
+                    "Consider using metacognition: Is your reasoning path sound? Any blind spots?"
+                ]
+        return []
+
+    @staticmethod
+    def _check_suggest_analogy(
+        all_thoughts: List[ThoughtData], lang: str
+    ) -> List[str]:
+        """Suggest analogy when problem is complex but no analogy used."""
+        threshold = ReflectionEngine.NO_ANALOGY_SUGGEST_THRESHOLD
+        if len(all_thoughts) < threshold:
+            return []
+
+        has_analogy = any(t.thought_type == ThoughtType.ANALOGY for t in all_thoughts)
+        if not has_analogy:
+            if lang == "zh":
+                return [
+                    "🔗 问题已较复杂，尚未使用类比思维。"
+                    "尝试 analogy：这个问题类似于什么？换一个领域会怎么解决？"
+                ]
+            else:
+                return [
+                    "🔗 Problem is complex but no analogy used. "
+                    "Try analogy: What is this problem similar to? How would another domain solve it?"
+                ]
+        return []
+
+    @staticmethod
+    def _get_cognitive_balance(thoughts: List[ThoughtData]) -> Dict[str, int]:
+        """Compute divergent vs convergent thought counts for reasoning health."""
+        divergent = sum(1 for t in thoughts if t.thought_type in ThoughtType.DIVERGENT_TYPES)
+        convergent = sum(1 for t in thoughts if t.thought_type in ThoughtType.CONVERGENT_TYPES)
+        other = len(thoughts) - divergent - convergent
+        return {
+            "divergentCount": divergent,
+            "convergentCount": convergent,
+            "otherCount": other,
+        }
 
     @staticmethod
     def _get_type_distribution(thoughts: List[ThoughtData]) -> Dict[str, int]:

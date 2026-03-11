@@ -1,24 +1,30 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from typing import List
+from typing import List, Set
 import numpy as np
 import jieba
 import os
 
 from .models import ThoughtData
 
-# Load Chinese stop words
-def load_chinese_stopwords():
+# Load Chinese stop words and pre-tokenize with jieba so the set matches tokenizer output.
+# This avoids "stop_words may be inconsistent with your preprocessing" warning.
+def load_chinese_stopwords() -> Set[str]:
     script_dir = os.path.dirname(__file__)
     stopwords_path = os.path.join(script_dir, "stopwords_zh.txt")
     try:
         with open(stopwords_path, 'r', encoding='utf-8') as f:
-            return [line.strip() for line in f if line.strip()]
+            raw = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
         print(f"Warning: Chinese stopwords file not found at {stopwords_path}. Using no stop words for Chinese.")
-        return []
-
-CHINESE_STOPWORDS = load_chinese_stopwords()
+        return set()
+    # Tokenize each stop word with jieba; union all tokens so sklearn's validation passes
+    tokens: Set[str] = set()
+    for w in raw:
+        tokens.add(w)
+        for t in jieba.cut(w):
+            tokens.add(t)
+    return tokens
 
 def chinese_tokenizer(text):
     """
@@ -49,8 +55,13 @@ class AdvancedAnalyzer:
         documents = [thought.thought for thought in thoughts]
 
         if lang == 'zh':
-            vectorizer = TfidfVectorizer(tokenizer=chinese_tokenizer, stop_words=CHINESE_STOPWORDS)
-        else: # Default to English
+            # token_pattern=None suppresses "token_pattern will not be used" warning when using custom tokenizer
+            vectorizer = TfidfVectorizer(
+                tokenizer=chinese_tokenizer,
+                token_pattern=None,
+                stop_words=CHINESE_STOPWORDS,
+            )
+        else:  # Default to English
             vectorizer = TfidfVectorizer(stop_words='english')
 
         tfidf_matrix = vectorizer.fit_transform(documents)

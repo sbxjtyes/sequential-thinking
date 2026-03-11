@@ -37,39 +37,27 @@ pip install uv
 
 ### 3. 启动HTTP服务 | Start HTTP Server
 
-**方式一：使用启动脚本（推荐）**
+**推荐方式：直接运行模块**
 
 ```powershell
 cd C:\mcp\mcp-sequential-thinking
+.\.venv\Scripts\activate
 
-# 默认配置（监听所有接口，端口8000）
-python run_http_server.py
+# 默认：监听 0.0.0.0:8000，公网可访问
+python -m mcp_sequential_thinking.server --transport http --host 0.0.0.0 --port 8000
 
 # 自定义端口
-python run_http_server.py --port 9000
+python -m mcp_sequential_thinking.server --transport http --host 0.0.0.0 --port 9000
 
 # 仅本地访问
-python run_http_server.py --host 127.0.0.1 --port 8000
+python -m mcp_sequential_thinking.server --transport http --host 127.0.0.1 --port 8000
 ```
 
-**方式二：使用uv运行**
+**备选：使用 uv 运行**
 
 ```powershell
 cd C:\mcp\mcp-sequential-thinking
-
-# HTTP模式
 uv run mcp-sequential-thinking --transport http --host 0.0.0.0 --port 8000
-
-# SSE模式（旧版）
-uv run mcp-sequential-thinking --transport sse --host 0.0.0.0 --port 8000
-```
-
-**方式三：直接运行模块**
-
-```powershell
-cd C:\mcp\mcp-sequential-thinking
-
-python -m mcp_sequential_thinking.server --transport http --host 0.0.0.0 --port 8000
 ```
 
 ### 4. 验证服务启动 | Verify Server
@@ -105,23 +93,7 @@ curl http://localhost:8000/mcp
 pip install mcp
 ```
 
-### 2. 修改客户端配置 | Configure Client
-
-编辑 `http_client_example.py`，修改服务器地址：
-
-```python
-# 将 YOUR_CLOUD_SERVER_IP 替换为你的云服务器公网IP
-SERVER_URL = "http://YOUR_CLOUD_SERVER_IP:8000/mcp"
-```
-
-### 3. 运行客户端示例 | Run Client Example
-
-```powershell
-cd C:\Users\YS\Desktop\mcp\mcp-sequential-thinking
-python http_client_example.py
-```
-
-### 4. 自定义调用代码 | Custom Client Code
+### 2. 客户端调用示例 | Client Example
 
 ```python
 import asyncio
@@ -232,7 +204,8 @@ telnet YOUR_CLOUD_SERVER_IP 8000
 # 创建启动脚本 start_mcp.bat
 @echo off
 cd C:\mcp\mcp-sequential-thinking
-python run_http_server.py
+call .venv\Scripts\activate.bat
+python -m mcp_sequential_thinking.server --transport http --host 0.0.0.0 --port 8000
 ```
 
 然后在任务计划程序中添加开机启动任务。
@@ -265,10 +238,8 @@ server {
 | 工具名称 | 功能描述 |
 |---------|---------|
 | `process_thought` | 记录单个思考节点并返回分析结果 |
-| `generate_summary` | 生成整个思考过程的摘要 |
+| `generate_summary` | 生成叙事性摘要（narrativeSummary、keyFindings、conclusions、reasoningPath） |
 | `clear_history` | 清除当前会话的所有思考历史 |
-| `export_session` | 导出思考会话到JSON文件 |
-| `import_session` | 从JSON文件导入思考会话 |
 
 ---
 
@@ -282,7 +253,7 @@ server {
 | thought_number | int | ✓ | - | 当前思考序号 |
 | total_thoughts | int | ✓ | - | 计划思考总数 |
 | next_thought_needed | bool | ✓ | - | 是否需要后续思考 |
-| thought_type | string | | analysis | 思考类型 |
+| thought_type | string | | analysis | 发散: divergence/analogy/question；收敛: convergence/synthesis/critique；逻辑: hypothesis/verification/analysis/decomposition；元: metacognition/observation/revision |
 | stage | string | | Problem Definition | 思考阶段 |
 | lang | string | | zh/en | 分析语言 |
 | confidence_level | float | | 0.5 | 置信度(0.0-1.0) |

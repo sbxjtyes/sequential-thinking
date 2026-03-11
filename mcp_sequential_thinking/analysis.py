@@ -83,84 +83,94 @@ class ThoughtAnalyzer:
         return combined
 
     @staticmethod
-    def generate_summary(thoughts: List[ThoughtData]) -> Dict[str, Any]:
-        """Generate a summary of the thinking process.
+    def generate_summary(thoughts: List[ThoughtData], lang: str = "zh") -> Dict[str, Any]:
+        """Generate a real narrative summary of the thinking process.
+
+        Produces readable text that synthesizes key points, findings, and conclusions
+        from the reasoning chain — not just metadata.
 
         Args:
             thoughts: List of thoughts to summarize.
+            lang: Language for summary text ('zh' or 'en').
 
         Returns:
-            Dict[str, Any]: Summary data including stage counts, timeline, and top tags.
+            Dict[str, Any]: Summary with narrativeSummary, keyFindings, conclusions,
+            reasoningPath, plus structural metadata.
         """
         if not thoughts:
-            return {"summary": "No thoughts recorded yet"}
+            empty_msg = "尚无思考记录" if lang == "zh" else "No thoughts recorded yet"
+            return {"summary": {"narrativeSummary": empty_msg}}
 
-        # Group thoughts by stage
-        stages = {}
-        for thought in thoughts:
-            if thought.stage not in stages:
-                stages[thought.stage] = []
-            stages[thought.stage].append(thought)
+        sorted_thoughts = sorted(thoughts, key=lambda x: x.thought_number)
 
-        # Count tags
+        # Group by stage
+        stages: Dict[str, List[ThoughtData]] = {}
+        for t in sorted_thoughts:
+            stages.setdefault(t.stage, []).append(t)
+
+        # Stage order by first occurrence
+        stage_first = {s: min(t.thought_number for t in ts) for s, ts in stages.items()}
+        stage_order = sorted(stages.keys(), key=lambda s: stage_first[s])
+
+        # Build narrative summary by stage (in reasoning order)
+        narrative_parts = []
+        for stage_name in stage_order:
+            stage_thoughts = stages[stage_name]
+            synthesis = [t for t in stage_thoughts if t.thought_type == ThoughtType.SYNTHESIS]
+            high_conf = [t for t in stage_thoughts if t.confidence_level >= 0.7]
+            candidates = synthesis or high_conf or stage_thoughts
+            rep = candidates[-1] if len(candidates) > 1 else candidates[0]
+            narrative_parts.append(f"【{stage_name}】{rep.thought.strip()}")
+
+        narrative_summary = "\n\n".join(narrative_parts)
+
+        # Key findings: synthesis, critique, verification, high-confidence conclusions
+        key_findings = []
+        for t in sorted_thoughts:
+            if t.thought_type in (ThoughtType.SYNTHESIS, ThoughtType.CRITIQUE, ThoughtType.VERIFICATION):
+                if len(t.thought.strip()) > 10:  # Skip trivial
+                    key_findings.append(t.thought.strip())
+            elif t.confidence_level >= 0.8 and t.thought_type == ThoughtType.CONVERGENCE:
+                key_findings.append(t.thought.strip())
+        if not key_findings:
+            # Fallback: last few thoughts as findings
+            for t in sorted_thoughts[-3:]:
+                if len(t.thought.strip()) > 15:
+                    key_findings.append(t.thought.strip())
+
+        # Conclusions: last synthesis or last 1–2 thoughts
+        conclusions_list = [t for t in sorted_thoughts if t.thought_type == ThoughtType.SYNTHESIS]
+        if conclusions_list:
+            conclusions = conclusions_list[-1].thought.strip()
+        else:
+            last_two = sorted_thoughts[-2:] if len(sorted_thoughts) >= 2 else sorted_thoughts
+            conclusions = "；".join(t.thought.strip() for t in last_two) if last_two else ""
+
+        # Reasoning path: stage order (already computed above)
+        reasoning_path = " → ".join(stage_order) if stage_order else ""
+
+        # Metadata
+        max_total = max((t.total_thoughts for t in thoughts), default=0)
+        percent_complete = (len(thoughts) / max_total) * 100 if max_total > 0 else 0
         all_tags = []
-        for thought in thoughts:
-            all_tags.extend(thought.tags)
+        for t in thoughts:
+            all_tags.extend(t.tags)
         tag_counts = Counter(all_tags)
         top_tags = tag_counts.most_common(5)
 
-        try:
-            # Safely calculate max total thoughts to avoid division by zero
-            max_total = max((t.total_thoughts for t in thoughts), default=0)
-            percent_complete = (len(thoughts) / max_total) * 100 if max_total > 0 else 0
-
-            logger.debug(f"Calculating completion: {len(thoughts)}/{max_total} = {percent_complete}%")
-
-            # Count thoughts by stage
-            stage_counts = {
-                stage: len(thoughts_list)
-                for stage, thoughts_list in stages.items()
+        summary = {
+            "narrativeSummary": narrative_summary,
+            "keyFindings": key_findings[:10],
+            "conclusions": conclusions,
+            "reasoningPath": reasoning_path,
+            "totalThoughts": len(thoughts),
+            "stages": {s: len(ts) for s, ts in stages.items()},
+            "uniqueStages": list(stages.keys()),
+            "topTags": [{"tag": tag, "count": count} for tag, count in top_tags],
+            "completionStatus": {
+                "percentComplete": round(percent_complete, 1)
             }
-
-            # Create timeline entries
-            sorted_thoughts = sorted(thoughts, key=lambda x: x.thought_number)
-            timeline_entries = [
-                {"number": t.thought_number, "stage": t.stage}
-                for t in sorted_thoughts
-            ]
-
-            # Create top tags entries
-            top_tags_entries = [
-                {"tag": tag, "count": count}
-                for tag, count in top_tags
-            ]
-
-            # Check if all predefined stages are represented
-            all_predefined_stages_present = all(
-                stage in stages
-                for stage in ThoughtStage.ALL
-            )
-
-            # Collect all unique stages used (including custom ones)
-            unique_stages = list(stages.keys())
-
-            summary = {
-                "totalThoughts": len(thoughts),
-                "stages": stage_counts,
-                "uniqueStages": unique_stages,
-                "timeline": timeline_entries,
-                "topTags": top_tags_entries,
-                "completionStatus": {
-                    "hasAllPredefinedStages": all_predefined_stages_present,
-                    "percentComplete": percent_complete
-                }
-            }
-        except Exception as e:
-            logger.error(f"Error generating summary: {e}")
-            summary = {
-                "totalThoughts": len(thoughts),
-                "error": str(e)
-            }
+        }
 
         return {"summary": summary}
 
@@ -185,54 +195,58 @@ class ThoughtAnalyzer:
         prompt_text = (
             f"I have just completed a thought in the '{stage}' stage. "
             f"My last thought is: '{content}'.\n\n"
-            f"What would be a logical next step?"
+            f"What would be a logical next step? Consider: "
+            f"divergence (explore alternatives), critique (challenge assumptions), "
+            f"or analogy (compare to similar problems)."
         )
 
         if stage == ThoughtStage.PROBLEM_DEFINITION:
             prompt_text = (
                 f"I have just completed a thought in the 'Problem Definition' stage. "
                 f"My last thought is: '{content}'.\n\n"
-                f"Based on this problem definition, please help me brainstorm the requirements. "
-                f"What key aspects should I consider? What are the potential ambiguities I need to clarify?"
+                f"Based on this problem definition, help me brainstorm (divergence): "
+                f"What key aspects should I consider? What ambiguities need clarification? "
+                f"Use question to challenge hidden assumptions."
             )
         elif stage == ThoughtStage.REQUIREMENT_ANALYSIS:
             problem_thoughts = [t for t in all_thoughts if t.stage == ThoughtStage.PROBLEM_DEFINITION]
             if problem_thoughts:
                 last_problem = problem_thoughts[-1].thought
                 prompt_text = (
-                    f"I have finished defining the problem, which is: '{last_problem}'.\n\n"
-                    f"I am now starting the 'Requirement Analysis' stage. My first thought is: '{content}'.\n\n"
-                    f"Please help me plan the requirement analysis. What key aspects should I consider?"
+                    f"I have finished defining the problem: '{last_problem}'.\n\n"
+                    f"I am now in 'Requirement Analysis'. My first thought is: '{content}'.\n\n"
+                    f"Help me diverge: What key aspects? Then use convergence to prioritize. "
+                    f"Consider analogy: similar projects handled this how?"
                 )
             else:
                 prompt_text = (
-                    f"I have just started the 'Requirement Analysis' stage. "
-                    f"My first thought is: '{content}'.\n\n"
-                    f"Based on my first requirement, please help me brainstorm other related requirements."
+                    f"I have just started 'Requirement Analysis'. My first thought is: '{content}'.\n\n"
+                    f"Help me brainstorm (divergence) other requirements. "
+                    f"Use question to uncover implicit needs."
                 )
         elif stage == ThoughtStage.TECHNICAL_DESIGN:
             prompt_text = (
-                f"I have completed the requirement analysis. My last thought on requirements is: '{content}'.\n\n"
-                f"Now, entering the 'Technical Design' stage, please help me create a high-level technical design. "
-                f"What are the key components, modules, or services? What technologies would you recommend and why?"
+                f"I have completed requirement analysis. Last thought: '{content}'.\n\n"
+                f"Entering 'Technical Design': First diverge (key components, tech options), "
+                f"then use critique to evaluate trade-offs, analogy to reference similar systems."
             )
         elif stage == ThoughtStage.IMPLEMENTATION:
             prompt_text = (
-                f"The technical design is complete. My last design thought is: '{content}'.\n\n"
-                f"I am now starting the 'Implementation' stage. Please help me break this down into "
-                f"smaller, manageable tasks. Can you suggest a file structure and some boilerplate code?"
+                f"Technical design complete. Last thought: '{content}'.\n\n"
+                f"Starting 'Implementation': Use decomposition to break into tasks. "
+                f"Use metacognition to check: Am I over-engineering? Under-specifying?"
             )
         elif stage == ThoughtStage.TESTING_AND_REFACTORING:
             prompt_text = (
-                f"I have finished a part of the implementation. My last thought is: '{content}'.\n\n"
-                f"Now, in the 'Testing and Refactoring' stage, what kind of tests (unit, integration, e2e) "
-                f"should I write to ensure its quality? Please provide some test case ideas."
+                f"Implementation done. Last thought: '{content}'.\n\n"
+                f"In 'Testing and Refactoring': Use critique to find edge cases and risks. "
+                f"Divergence for test ideas, then convergence to prioritize critical paths."
             )
         elif stage == ThoughtStage.INTEGRATION_AND_DEPLOYMENT:
             prompt_text = (
-                f"I have finished testing and refactoring. My last thought was: '{content}'.\n\n"
-                f"I am now entering the 'Integration and Deployment' stage. What are the next steps? "
-                f"Should I be thinking about documentation, environment configuration, or CI/CD pipelines?"
+                f"Testing and refactoring done. Last thought: '{content}'.\n\n"
+                f"Entering 'Integration and Deployment': Use synthesis to tie it together. "
+                f"Metacognition: What did we learn? What would we do differently?"
             )
 
         return prompt_text

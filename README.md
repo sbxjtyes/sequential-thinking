@@ -12,13 +12,13 @@ A Model Context Protocol (MCP) server that facilitates structured, progressive t
 
 ## Features
 
+- **Human Cognition Alignment**: Thought types support both divergent (creative, exploratory) and convergent (logical, decisive) thinking — divergence, analogy, question, convergence, synthesis, critique, metacognition, etc.
 - **Structured Thinking Framework**: Organizes thoughts through customizable stages. Comes with predefined software development stages (Problem Definition, Requirement Analysis, Technical Design, etc.), but accepts **any string** as a stage name for full flexibility across use cases (research, business analysis, creative writing, etc.)
 - **Thought Tracking**: Records and manages sequential thoughts with metadata
 - **Related Thought Analysis**: Identifies connections between similar thoughts
 - **Progress Monitoring**: Tracks your position in the overall thinking sequence
-- **Summary Generation**: Creates concise overviews of the entire thought process
-- **Persistent Storage**: Automatically saves your thinking sessions with thread-safety
-- **Data Import/Export**: Share and reuse thinking sessions
+- **Narrative Summary**: Generates real summaries (narrativeSummary, keyFindings, conclusions)
+- **In-Memory Storage**: Session data persists for server lifetime
 - **Extensible Architecture**: Easily customize and extend functionality
 - **Robust Error Handling**: Graceful handling of edge cases and corrupted data
 - **Type Safety**: Comprehensive type annotations and validation
@@ -31,7 +31,6 @@ A Model Context Protocol (MCP) server that facilitates structured, progressive t
 ## Key Technologies
 
 - **Pydantic**: For data validation and serialization
-- **SQLAlchemy**: For database-backed persistent storage
 - **FastMCP**: For Model Context Protocol integration
 - **scikit-learn + jieba**: For TF-IDF semantic similarity analysis (Chinese & English)
 - **PyYAML**: For configuration management
@@ -43,7 +42,7 @@ mcp-sequential-thinking/
 ├── mcp_sequential_thinking/
 │   ├── server.py           # Main server implementation and MCP tools
 │   ├── models.py           # Data models with Pydantic validation
-│   ├── storage.py          # SQLAlchemy-backed persistence layer
+│   ├── storage.py          # In-memory thought storage
 │   ├── analysis.py         # Thought analysis and pattern detection
 │   ├── advanced_analysis.py # TF-IDF semantic similarity engine
 │   ├── config.py           # Configuration loading from YAML
@@ -95,64 +94,31 @@ mcp-sequential-thinking/
    pytest --cov=mcp_sequential_thinking
    ```
 
-## Claude Desktop Integration
+## MCP Integration (Cursor / Claude Desktop)
 
-Add to your Claude Desktop configuration (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
-
-```json
-{
-  "mcpServers": {
-    "sequential-thinking": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "C:\\path\\to\\your\\mcp-sequential-thinking\\run_server.py",
-        "run",
-        "server.py"
-        ]
-      }
-    }
-  }
-```
-
-Alternatively, if you've installed the package with `pip install -e .`, you can use:
+配置路径为项目根目录下的 `run_server.py`：
 
 ```json
 {
   "mcpServers": {
     "sequential-thinking": {
-      "command": "mcp-sequential-thinking"
+      "command": "python",
+      "args": ["C:\\path\\to\\mcp-sequential-thinking\\run_server.py"],
+      "env": { "PYTHONIOENCODING": "utf-8" }
+    }
     }
   }
-}
 ```
 
-You can also run it directly using uvx and skipping the installation step:
-
-```json
-{
-  "mcpServers": {
-    "sequential-thinking": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/arben-adm/mcp-sequential-thinking",
-        "--with",
-        "portalocker",
-        "mcp-sequential-thinking"
-      ]
-    }
-  }
-}
-```
+**HTTP 远程**：`"url": "http://YOUR_SERVER_IP:8000/mcp"`。详见 [HTTP_DEPLOYMENT.md](HTTP_DEPLOYMENT.md)。
 
 # How It Works
 
-The server maintains a history of thoughts and processes them through a structured workflow. Each thought is validated using Pydantic models, categorized into thinking stages, and stored with relevant metadata in a thread-safe storage system. The server automatically handles data persistence, backup creation, and provides tools for analyzing relationships between thoughts.
+The server maintains a history of thoughts and processes them through a structured workflow. Each thought is validated using Pydantic models, categorized into thinking stages, and stored in memory. The reflection engine monitors reasoning patterns and suggests cognitive mode switches (divergence/convergence, critique, metacognition).
 
 ## Usage Guide
 
-The Sequential Thinking server exposes five tools:
+The Sequential Thinking server exposes three tools:
 
 ### 1. `process_thought`
 
@@ -164,6 +130,7 @@ Records and analyzes a new thought in your sequential thinking process.
 - `thought_number` (integer, required): Position in your sequence (e.g., 1 for first thought)
 - `total_thoughts` (integer, required): Expected total thoughts in the sequence
 - `next_thought_needed` (boolean, required): Whether more thoughts are needed after this one
+- `thought_type` (string, optional): Cognitive operation type. **Divergent**: divergence, analogy, question. **Convergent**: convergence, synthesis, critique. **Logical**: hypothesis, verification, analysis, decomposition. **Meta**: metacognition, observation, revision. Default: "analysis".
 - `stage` (string, optional): The thinking stage. **Any string is accepted.** Predefined stages include:
   - "Problem Definition" (default)
   - "Requirement Analysis"
@@ -214,30 +181,24 @@ process_thought(
 
 ### 2. `generate_summary`
 
-Generates a summary of your entire thinking process.
+Generates a real narrative summary of your thinking process: key points per stage, findings, conclusions, reasoning path.
+
+**Parameters:**
+- `lang` (string, optional): Summary language ('zh' or 'en'), defaults to config
 
 **Example output:**
 
 ```json
 {
   "summary": {
+    "narrativeSummary": "【Problem Definition】...\n\n【Requirement Analysis】...",
+    "keyFindings": ["发现1", "发现2"],
+    "conclusions": "综合结论...",
+    "reasoningPath": "Problem Definition → Requirement Analysis → ...",
     "totalThoughts": 6,
-    "stages": {
-      "Problem Definition": 1,
-      "Requirement Analysis": 1,
-      "Technical Design": 1,
-      "Implementation": 1,
-      "Testing and Refactoring": 1,
-      "Integration and Deployment": 1
-    },
-    "timeline": [
-      {"number": 1, "stage": "Problem Definition"},
-      {"number": 2, "stage": "Requirement Analysis"},
-      {"number": 3, "stage": "Technical Design"},
-      {"number": 4, "stage": "Implementation"},
-      {"number": 5, "stage": "Testing and Refactoring"},
-      {"number": 6, "stage": "Integration and Deployment"}
-    ]
+    "stages": {"Problem Definition": 1, "Requirement Analysis": 1, ...},
+    "topTags": [{"tag": "x", "count": 2}],
+    "completionStatus": {"percentComplete": 100}
   }
 }
 ```
@@ -245,17 +206,6 @@ Generates a summary of your entire thinking process.
 ### 3. `clear_history`
 
 Resets the thinking process by clearing all recorded thoughts.
-
-### 4. `export_session`
-
-Exports the entire thinking session to a local JSON file for archiving or sharing.
-
-**Parameters:**
-- `file_path` (string): Absolute path for saving the session file
-
-### 5. `import_session`
-
-Imports a previously exported thinking session from a JSON file. Overwrites current session.
 
 ## Practical Applications
 
@@ -291,6 +241,15 @@ For detailed examples of how to customize and extend the Sequential Thinking ser
 
 
 
+
+## 文档 | Documentation
+
+| 文档 | 说明 |
+|------|------|
+| [README.md](README.md) | 项目说明与快速开始 |
+| [HTTP_DEPLOYMENT.md](HTTP_DEPLOYMENT.md) | HTTP 远程部署指南 |
+| [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
+| [example.md](example.md) | 未来发展规划 |
 
 ## License
 

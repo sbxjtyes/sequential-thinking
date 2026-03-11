@@ -10,6 +10,7 @@ import sys
 from typing import List, Optional
 
 from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.transport_security import TransportSecuritySettings
 
 # Use absolute imports when running as a script
 try:
@@ -30,13 +31,20 @@ except ImportError:
 logger = configure_logging("sequential-thinking.server")
 
 
-mcp = FastMCP("sequential-thinking")
+# 公网部署时需关闭 DNS rebinding 保护，否则 Host 为公网 IP（如 106.54.55.203:8000）会被拒绝
+# When deploying publicly, disable DNS rebinding protection so clients can connect via public IP
+mcp = FastMCP(
+    "sequential-thinking",
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    ),
+)
 
 storage = ThoughtStorage()
 logger.info("--- In-memory ThoughtStorage initialized ---")
 
 @mcp.tool()
-def process_thought(
+async def process_thought(
     thought: str,
     thought_number: int,
     total_thoughts: int,
@@ -71,10 +79,11 @@ def process_thought(
         thought_number: 当前思考的序号 | Sequence number of this thought.
         total_thoughts: 计划的思考总数 | Total number of thoughts planned.
         next_thought_needed: 是否还需要后续思考 | Whether more thoughts are expected.
-        thought_type: 认知操作类型（可选）。预定义类型：
-               "hypothesis"（假设）、"verification"（验证）、"analysis"（分析）、
-               "critique"（批判反思）、"synthesis"（综合）、"decomposition"（分解）、
-               "observation"（观察）、"revision"（修订）。也接受自定义类型。默认 "analysis"。
+        thought_type: 认知操作类型（可选）。发散：divergence（发散）、analogy（类比）、
+               question（提问）；收敛：convergence（收敛）、synthesis（综合）、critique（批判）；
+               逻辑：hypothesis（假设）、verification（验证）、analysis（分析）、
+               decomposition（分解）；元认知：metacognition（元认知）、observation（观察）、
+               revision（修订）。默认 "analysis"。
                | Cognitive operation type. Defaults to "analysis".
         stage: 思考所属阶段，接受任意字符串 | The thinking stage. Any string is accepted.
         parent_thought_id: 父思考的 UUID（用于树状分支），null 表示根节点 |
@@ -101,7 +110,7 @@ def process_thought(
         logger.info(f"Processing thought #{thought_number}/{total_thoughts} [{thought_type}] in stage '{stage}' for language '{final_lang}'")
 
         if ctx:
-            ctx.report_progress(thought_number - 1, total_thoughts)
+            await ctx.report_progress(thought_number - 1, total_thoughts)
 
         thought_data = ThoughtData(
             thought=thought,
@@ -136,23 +145,26 @@ def process_thought(
         return {"error": str(e), "status": "failed"}
 
 @mcp.tool()
-def generate_summary() -> dict:
+def generate_summary(lang: Optional[str] = None) -> dict:
     """
-    生成整个思考过程的全局摘要 | Generates a comprehensive summary of the thinking process.
+    生成整个思考过程的真实摘要 | Generates a real narrative summary of the thinking process.
 
-    提供思考会话的鸟瞰视图，包括思考总数、各阶段分布、时间线以及高频标签统计。
-    适用于快速回顾和理解整体思考脉络。
+    产出可读的叙事性总结，包括：各阶段核心要点(narrativeSummary)、关键发现(keyFindings)、
+    结论(conclusions)、推理路径(reasoningPath)。便于 LLM 做最终综合。
 
-    Provides a bird's-eye view of the session, including total thoughts count, distribution
-    across stages, timeline, and frequently used tags.
+    Produces readable narrative text: key points per stage, findings, conclusions, reasoning path.
+
+    Args:
+        lang: 摘要语言 'zh'/'en'，默认从配置读取 | Summary language.
 
     Returns:
-        包含摘要数据的字典 | Dictionary containing comprehensive summary data.
+        包含 narrativeSummary、keyFindings、conclusions、reasoningPath 的字典。
     """
     try:
         logger.info("Generating thinking process summary")
         all_thoughts = storage.get_all_thoughts()
-        return ThoughtAnalyzer.generate_summary(all_thoughts)
+        final_lang = lang or config.features.semantic_analysis.default_lang
+        return ThoughtAnalyzer.generate_summary(all_thoughts, lang=final_lang)
     except Exception as e:
         logger.error(f"Error generating summary: {str(e)}")
         return {"error": str(e), "status": "failed"}
@@ -163,10 +175,8 @@ def clear_history() -> dict:
     清除当前会话的所有思考历史 | Deletes all thoughts from the current session.
 
     ⚠️ 警告：这是一个破坏性且不可逆的操作，将永久删除所有已记录的思考。
-    执行前请确保已导出重要数据。
 
-    ⚠️ Warning: This is a destructive and irreversible operation. Make sure to
-    export important data before executing.
+    ⚠️ Warning: This is a destructive and irreversible operation.
 
     Returns:
         包含操作状态信息的字典 | Dictionary with operation status message.
@@ -177,50 +187,6 @@ def clear_history() -> dict:
         return {"status": "success", "message": "Thought history cleared."}
     except Exception as e:
         logger.error(f"Error clearing history: {str(e)}")
-        return {"error": str(e), "status": "failed"}
-
-@mcp.tool()
-def export_session(file_path: str) -> dict:
-    """
-    将整个思考会话导出为本地 JSON 文件 | Exports the entire thinking session to a local JSON file.
-
-    用于保存、归档和分享思考过程。导出的文件包含完整的思考数据、元数据和时间戳，
-    可通过 import_session 工具重新导入。
-
-    Args:
-        file_path: 会话文件保存的绝对路径 | Absolute path for saving the session file.
-
-    Returns:
-        包含操作状态信息的字典 | Dictionary with operation status message.
-    """
-    try:
-        logger.info(f"Exporting session to {file_path}")
-        storage.export_session(file_path)
-        return {"status": "success", "message": f"Session exported to {file_path}"}
-    except Exception as e:
-        logger.error(f"Error exporting session: {str(e)}")
-        return {"error": str(e), "status": "failed"}
-
-@mcp.tool()
-def import_session(file_path: str) -> dict:
-    """
-    从本地 JSON 文件导入思考会话，覆盖当前会话 | Imports a thinking session from a local JSON file.
-
-    从之前导出的 JSON 文件恢复思考会话。此操作会覆盖当前所有思考记录，
-    建议在导入前先导出当前会话以备份。
-
-    Args:
-        file_path: 要导入的会话文件的绝对路径 | Absolute path to the session file.
-
-    Returns:
-        包含操作状态信息的字典 | Dictionary with operation status message.
-    """
-    try:
-        logger.info(f"Importing session from {file_path}")
-        storage.import_session(file_path)
-        return {"status": "success", "message": f"Session imported from {file_path}"}
-    except Exception as e:
-        logger.error(f"Error importing session: {str(e)}")
         return {"error": str(e), "status": "failed"}
 
 
@@ -295,10 +261,19 @@ def main():
     # Flush stdout to ensure no buffered content remains
     sys.stdout.flush()
 
-    # Set environment variables for host and port
+    # Set host/port for HTTP/SSE transport.
+    # FastMCP streamable-http ignores env vars and often binds to 127.0.0.1.
+    # Use mcp.settings (if available) to force host/port before run().
     if args.transport in ["http", "sse"]:
-        os.environ['FASTMCP_HOST'] = args.host
-        os.environ['FASTMCP_PORT'] = str(args.port)
+        os.environ["FASTMCP_HOST"] = args.host
+        os.environ["FASTMCP_PORT"] = str(args.port)
+        if args.host not in ["127.0.0.1", "localhost"]:
+            os.environ["FASTMCP_DISABLE_HOST_CHECK"] = "1"
+        # Explicitly set host/port on FastMCP settings so Uvicorn binds correctly
+        if hasattr(mcp, "settings"):
+            mcp.settings.host = args.host
+            mcp.settings.port = args.port
+            logger.info(f"FastMCP settings: host={mcp.settings.host}, port={mcp.settings.port}")
 
     # Run the MCP server with specified transport
     if args.transport == "stdio":

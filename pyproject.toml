@@ -1,6 +1,6 @@
 [project]
 name = "sequential-thinking"
-version = "0.7.1"
+version = "0.7.4"
 description = "A Sequential Thinking MCP Server for advanced problem solving"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -41,7 +41,7 @@ all = [
 ]
 
 [project.urls]
-Source = "https://github.com/arben-adm/sequential-thinking"
+Source = "https://github.com/sbxjtyes/sequential-thinking"
 
 [tool.hatch.build.targets.wheel]
 packages = ["mcp_sequential_thinking"]

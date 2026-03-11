@@ -50,37 +50,66 @@ class ThoughtStage:
 
 
 class ThoughtType:
-    """Cognitive operation types for structured reasoning.
+    """Cognitive operation types aligned with human thinking patterns.
 
     Each thought should be tagged with a type that describes what kind of
-    cognitive operation it represents. This enables reasoning chain analysis,
-    automatic reflection prompts, and quality assessment.
+    cognitive operation it represents. Designed to support both divergent
+    (creative, exploratory) and convergent (logical, decisive) thinking.
 
-    Predefined types:
+    Core reasoning (逻辑严谨):
         - HYPOTHESIS: Proposing a possible explanation or solution
         - VERIFICATION: Testing/validating a hypothesis with evidence
         - ANALYSIS: Logical reasoning and inference
         - CRITIQUE: Critical reflection, identifying flaws or gaps
         - SYNTHESIS: Combining multiple insights into a conclusion
+
+    Divergent thinking (发散思维):
+        - DIVERGENCE: Brainstorming, exploring multiple possibilities
+        - ANALOGY: Drawing parallels, "what if it were like X?"
+        - QUESTION: Raising questions, Socratic inquiry
+
+    Convergent thinking (收敛思维):
+        - CONVERGENCE: Selecting, narrowing down, making choices
         - DECOMPOSITION: Breaking a problem into sub-problems
+
+    Meta & grounding:
         - OBSERVATION: Recording facts, data, or observations
+        - METACOGNITION: Reflecting on the thinking process itself
         - REVISION: Correcting or updating an earlier thought
 
     Any string is accepted as a valid thought type.
     """
+    # Core logical reasoning
     HYPOTHESIS = "hypothesis"
     VERIFICATION = "verification"
     ANALYSIS = "analysis"
     CRITIQUE = "critique"
     SYNTHESIS = "synthesis"
+
+    # Divergent thinking (发散)
+    DIVERGENCE = "divergence"
+    ANALOGY = "analogy"
+    QUESTION = "question"
+
+    # Convergent thinking (收敛)
+    CONVERGENCE = "convergence"
     DECOMPOSITION = "decomposition"
+
+    # Meta & grounding
     OBSERVATION = "observation"
+    METACOGNITION = "metacognition"
     REVISION = "revision"
 
     ALL = [
-        HYPOTHESIS, VERIFICATION, ANALYSIS, CRITIQUE,
-        SYNTHESIS, DECOMPOSITION, OBSERVATION, REVISION,
+        HYPOTHESIS, VERIFICATION, ANALYSIS, CRITIQUE, SYNTHESIS,
+        DIVERGENCE, ANALOGY, QUESTION, CONVERGENCE, DECOMPOSITION,
+        OBSERVATION, METACOGNITION, REVISION,
     ]
+
+    # For reflection: types that expand possibilities
+    DIVERGENT_TYPES = {DIVERGENCE, ANALOGY, QUESTION, HYPOTHESIS}
+    # Types that narrow or conclude
+    CONVERGENT_TYPES = {CONVERGENCE, SYNTHESIS, CRITIQUE, VERIFICATION}
 
 
 class ThoughtData(BaseModel):

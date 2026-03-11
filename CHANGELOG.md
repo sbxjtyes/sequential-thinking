@@ -1,5 +1,54 @@
 # Changelog
 
+## Version 0.7.4 (2026-03-12) — Tools Cleanup & Real Summary
+
+### Removed
+- **export_session** and **import_session** tools: Removed as unnecessary for typical MCP usage.
+- **storage.export_session** and **storage.import_session** methods.
+
+### Changed
+- **generate_summary**: Now produces real narrative summarization instead of metadata-only:
+  - `narrativeSummary`: Key points per stage, concatenated as readable text.
+  - `keyFindings`: Extracted from synthesis/critique/verification/high-confidence thoughts.
+  - `conclusions`: Final synthesis or last thoughts.
+  - `reasoningPath`: Stage flow (e.g. "Problem Definition → Requirement Analysis → ...").
+- **generate_summary** accepts optional `lang` parameter for summary language.
+
+---
+
+## Version 0.7.3 (2026-03-12) — Human Cognition Alignment
+
+### Added
+- **New cognitive thought types** (models.py): `divergence` (发散), `convergence` (收敛), `analogy` (类比), `question` (提问), `metacognition` (元认知) — aligned with human thinking patterns.
+- **Divergence/convergence balance check** (reflection.py): Prompts when reasoning is too exploratory (no selection) or too rigid (no exploration).
+- **Metacognition reminder** (reflection.py): Suggests stepping back to reflect on reasoning path after 8+ thoughts.
+- **Analogy suggestion** (reflection.py): Encourages analogy when problem is complex but none used.
+- **Cognitive balance metrics** (reflection.py): `reasoningHealth.cognitiveBalance` with `divergentCount`, `convergentCount`, `otherCount`.
+
+### Changed
+- **Contextual prompts** (analysis.py): Stage-specific prompts now guide divergence, convergence, critique, analogy, and metacognition.
+- **Same-type streak prompt** (reflection.py): Suggests divergence, critique, verification, analogy instead of generic modes.
+- **process_thought docstring** (server.py): Updated thought_type description with new cognitive types.
+
+---
+
+## Version 0.7.2 (2026-03-11) — HTTP Deployment & Cleanup
+
+### Fixed
+- **server.py**: `process_thought` now properly `await`s `ctx.report_progress()` to fix "coroutine was never awaited" warning.
+- **server.py**: Added `TransportSecuritySettings(enable_dns_rebinding_protection=False)` so clients can connect via public IP (e.g. `106.54.55.203:8000`) without 421 Invalid Host header.
+- **server.py**: Explicitly set `mcp.settings.host` and `mcp.settings.port` before `run()` so Uvicorn binds to `0.0.0.0` correctly.
+- **advanced_analysis.py**: Added `token_pattern=None` for Chinese `TfidfVectorizer`; refactored `load_chinese_stopwords()` to use jieba pre-tokenization, eliminating sklearn stop_words/preprocessing mismatch warnings.
+
+### Removed
+- **Obsolete HTTP scripts**: `start_http_no_host_check.py`, `run_public_http.py`, `run_http_server.py`, `simple_http_server.py`, `simple_http_client.py`, `start_http_server.bat` — superseded by `python -m mcp_sequential_thinking.server --transport http`.
+- **Test scripts**: `test_mcp_full.py`, `test_mcp_detailed.py`, `test_mcp_connection.py`.
+
+### Changed
+- **HTTP_DEPLOYMENT.md**: Recommends `python -m mcp_sequential_thinking.server` as primary startup; removed references to deleted scripts; updated Q3 auto-start example.
+
+---
+
 ## Version 0.7.1 (2026-03-07) — Dead Code Cleanup & Database Removal
 
 ### Removed
