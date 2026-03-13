@@ -10,3 +10,7 @@ features:
   # Settings for automatic prompt generation on new stage entry
   automaticPrompts:
     enabled: true
+
+  # Claude-inspired extended thinking (多角度探索、自我校验、自适应深度)
+  extendedThinking:
+    enabled: true  # Enable reflection prompts for multi-angle, self-check, adaptive depth

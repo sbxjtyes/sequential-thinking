@@ -4,12 +4,12 @@ Exposes tools for recording thoughts, generating summaries, managing sessions,
 and performing analysis through the Model Context Protocol (MCP).
 """
 
-import json
 import os
 import sys
 from typing import List, Optional
 
 from mcp.server.fastmcp import FastMCP, Context
+from pydantic import ValidationError
 from mcp.server.transport_security import TransportSecuritySettings
 
 # Use absolute imports when running as a script
@@ -79,12 +79,12 @@ async def process_thought(
         thought_number: 当前思考的序号 | Sequence number of this thought.
         total_thoughts: 计划的思考总数 | Total number of thoughts planned.
         next_thought_needed: 是否还需要后续思考 | Whether more thoughts are expected.
-        thought_type: 认知操作类型（可选）。发散：divergence（发散）、analogy（类比）、
-               question（提问）；收敛：convergence（收敛）、synthesis（综合）、critique（批判）；
-               逻辑：hypothesis（假设）、verification（验证）、analysis（分析）、
-               decomposition（分解）；元认知：metacognition（元认知）、observation（观察）、
-               revision（修订）。默认 "analysis"。
-               | Cognitive operation type. Defaults to "analysis".
+        thought_type: 认知操作类型（可选）。发散：divergence、analogy、question、angle_exploration；
+               收敛：convergence、synthesis、critique、verification、self_check；
+               逻辑：hypothesis、verification、analysis、decomposition；
+               元认知：metacognition、observation、revision。
+               Claude 风格：self_check（自我校验）、angle_exploration（多角度探索）。默认 "analysis"。
+               | Cognitive operation type. Claude-style: self_check, angle_exploration. Defaults to "analysis".
         stage: 思考所属阶段，接受任意字符串 | The thinking stage. Any string is accepted.
         parent_thought_id: 父思考的 UUID（用于树状分支），null 表示根节点 |
                UUID of parent thought for tree-structured reasoning.
@@ -137,9 +137,9 @@ async def process_thought(
 
         logger.info(f"Successfully processed thought #{thought_number}")
         return analysis
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parsing error: {e}")
-        return {"error": f"JSON parsing error: {str(e)}", "status": "failed"}
+    except ValidationError as e:
+        logger.error(f"Validation error: {e}")
+        return {"error": f"Validation error: {str(e)}", "status": "failed"}
     except Exception as e:
         logger.error(f"Error processing thought: {e}")
         return {"error": str(e), "status": "failed"}

@@ -144,7 +144,8 @@ class ThoughtAnalyzer:
             conclusions = conclusions_list[-1].thought.strip()
         else:
             last_two = sorted_thoughts[-2:] if len(sorted_thoughts) >= 2 else sorted_thoughts
-            conclusions = "；".join(t.thought.strip() for t in last_two) if last_two else ""
+            sep = "；" if lang == "zh" else "; "
+            conclusions = sep.join(t.thought.strip() for t in last_two) if last_two else ""
 
         # Reasoning path: stage order (already computed above)
         reasoning_path = " → ".join(stage_order) if stage_order else ""
@@ -347,7 +348,18 @@ class ThoughtAnalyzer:
                 "reflection": None,
                 "context": {
                     "thoughtHistoryLength": len(all_thoughts),
-                    "currentStage": thought.stage
+                    "currentStage": thought.stage,
+                    **(
+                        {
+                            "extendedThinkingMetrics": {
+                                "hasSelfCheck": any(t.thought_type == ThoughtType.SELF_CHECK for t in all_thoughts),
+                                "hasAngleExploration": any(t.thought_type == ThoughtType.ANGLE_EXPLORATION for t in all_thoughts),
+                                "branchCount": len(set(t.branch_label for t in all_thoughts if t.branch_label)),
+                            }
+                        }
+                        if config.features.extended_thinking.enabled
+                        else {}
+                    ),
                 }
             }
         }

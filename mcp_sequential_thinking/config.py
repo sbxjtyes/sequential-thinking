@@ -13,9 +13,14 @@ class SemanticAnalysisConfig(BaseModel):
 class AutomaticPromptsConfig(BaseModel):
     enabled: bool = True
 
+class ExtendedThinkingConfig(BaseModel):
+    """Claude-inspired: multi-angle exploration, self-check, adaptive depth."""
+    enabled: bool = True
+
 class FeaturesConfig(BaseModel):
     semantic_analysis: SemanticAnalysisConfig = Field(default_factory=SemanticAnalysisConfig, alias="semanticAnalysis")
     automatic_prompts: AutomaticPromptsConfig = Field(default_factory=AutomaticPromptsConfig, alias="automaticPrompts")
+    extended_thinking: ExtendedThinkingConfig = Field(default_factory=ExtendedThinkingConfig, alias="extendedThinking")
 
 class AppConfig(BaseModel):
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
@@ -29,7 +34,8 @@ def load_config() -> AppConfig:
     config_data = {
         'features': {
             'semanticAnalysis': {'enabled': True, 'defaultLang': 'en'},
-            'automaticPrompts': {'enabled': True}
+            'automaticPrompts': {'enabled': True},
+            'extendedThinking': {'enabled': True}
         }
     }
 
@@ -44,10 +50,14 @@ def load_config() -> AppConfig:
                 # Deep merge yaml_data into config_data
                 if yaml_data:
                     if 'features' in yaml_data:
-                        if 'semanticAnalysis' in yaml_data['features']:
-                            config_data['features']['semanticAnalysis'].update(yaml_data['features']['semanticAnalysis'])
-                        if 'automaticPrompts' in yaml_data['features']:
-                            config_data['features']['automaticPrompts'].update(yaml_data['features']['automaticPrompts'])
+                        feats = yaml_data['features']
+                        for key, target in [
+                            ('semanticAnalysis', 'semanticAnalysis'),
+                            ('automaticPrompts', 'automaticPrompts'),
+                            ('extendedThinking', 'extendedThinking'),
+                        ]:
+                            if key in feats and isinstance(feats[key], dict):
+                                config_data['features'][target].update(feats[key])
         except Exception as e:
             print(f"Warning: Could not load or parse config.yaml. Using default settings. Error: {e}")
     

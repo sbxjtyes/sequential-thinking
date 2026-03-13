@@ -1,7 +1,6 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Set
-import numpy as np
 import jieba
 import os
 
@@ -55,11 +54,12 @@ class AdvancedAnalyzer:
         documents = [thought.thought for thought in thoughts]
 
         if lang == 'zh':
+            chinese_stopwords = load_chinese_stopwords()
             # token_pattern=None suppresses "token_pattern will not be used" warning when using custom tokenizer
             vectorizer = TfidfVectorizer(
                 tokenizer=chinese_tokenizer,
                 token_pattern=None,
-                stop_words=CHINESE_STOPWORDS,
+                stop_words=chinese_stopwords,
             )
         else:  # Default to English
             vectorizer = TfidfVectorizer(stop_words='english')

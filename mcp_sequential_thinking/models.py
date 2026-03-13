@@ -77,6 +77,10 @@ class ThoughtType:
         - METACOGNITION: Reflecting on the thinking process itself
         - REVISION: Correcting or updating an earlier thought
 
+    Claude-inspired extended thinking (参考 Claude 思考模型):
+        - SELF_CHECK: Double- or triple-checking an answer, re-verifying logic
+        - ANGLE_EXPLORATION: Exploring a different angle or branch of reasoning
+
     Any string is accepted as a valid thought type.
     """
     # Core logical reasoning
@@ -100,16 +104,21 @@ class ThoughtType:
     METACOGNITION = "metacognition"
     REVISION = "revision"
 
+    # Claude-inspired extended thinking (多角度探索、自我校验)
+    SELF_CHECK = "self_check"
+    ANGLE_EXPLORATION = "angle_exploration"
+
     ALL = [
         HYPOTHESIS, VERIFICATION, ANALYSIS, CRITIQUE, SYNTHESIS,
         DIVERGENCE, ANALOGY, QUESTION, CONVERGENCE, DECOMPOSITION,
         OBSERVATION, METACOGNITION, REVISION,
+        SELF_CHECK, ANGLE_EXPLORATION,
     ]
 
     # For reflection: types that expand possibilities
-    DIVERGENT_TYPES = {DIVERGENCE, ANALOGY, QUESTION, HYPOTHESIS}
+    DIVERGENT_TYPES = {DIVERGENCE, ANALOGY, QUESTION, HYPOTHESIS, ANGLE_EXPLORATION}
     # Types that narrow or conclude
-    CONVERGENT_TYPES = {CONVERGENCE, SYNTHESIS, CRITIQUE, VERIFICATION}
+    CONVERGENT_TYPES = {CONVERGENCE, SYNTHESIS, CRITIQUE, VERIFICATION, SELF_CHECK}
 
 
 class ThoughtData(BaseModel):

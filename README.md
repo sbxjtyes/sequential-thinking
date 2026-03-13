@@ -13,6 +13,7 @@ A Model Context Protocol (MCP) server that facilitates structured, progressive t
 ## Features
 
 - **Human Cognition Alignment**: Thought types support both divergent (creative, exploratory) and convergent (logical, decisive) thinking — divergence, analogy, question, convergence, synthesis, critique, metacognition, etc.
+- **Claude-Inspired Extended Thinking**: Multi-angle exploration (`angle_exploration`), self-check before conclusions (`self_check`), adaptive thinking depth suggestions. Configurable via `config.yaml` → `features.extendedThinking.enabled`.
 - **Structured Thinking Framework**: Organizes thoughts through customizable stages. Comes with predefined software development stages (Problem Definition, Requirement Analysis, Technical Design, etc.), but accepts **any string** as a stage name for full flexibility across use cases (research, business analysis, creative writing, etc.)
 - **Thought Tracking**: Records and manages sequential thoughts with metadata
 - **Related Thought Analysis**: Identifies connections between similar thoughts
@@ -114,7 +115,7 @@ mcp-sequential-thinking/
 
 # How It Works
 
-The server maintains a history of thoughts and processes them through a structured workflow. Each thought is validated using Pydantic models, categorized into thinking stages, and stored in memory. The reflection engine monitors reasoning patterns and suggests cognitive mode switches (divergence/convergence, critique, metacognition).
+The server maintains a history of thoughts and processes them through a structured workflow. Each thought is validated using Pydantic models, categorized into thinking stages, and stored in memory. The reflection engine monitors reasoning patterns and suggests cognitive mode switches (divergence/convergence, critique, metacognition). When extended thinking is enabled, it also encourages Claude-style patterns: multi-angle exploration, self-check before synthesis, and adaptive thinking depth for complex problems.
 
 ## Usage Guide
 
@@ -130,7 +131,7 @@ Records and analyzes a new thought in your sequential thinking process.
 - `thought_number` (integer, required): Position in your sequence (e.g., 1 for first thought)
 - `total_thoughts` (integer, required): Expected total thoughts in the sequence
 - `next_thought_needed` (boolean, required): Whether more thoughts are needed after this one
-- `thought_type` (string, optional): Cognitive operation type. **Divergent**: divergence, analogy, question. **Convergent**: convergence, synthesis, critique. **Logical**: hypothesis, verification, analysis, decomposition. **Meta**: metacognition, observation, revision. Default: "analysis".
+- `thought_type` (string, optional): Cognitive operation type. **Divergent**: divergence, analogy, question, angle_exploration. **Convergent**: convergence, synthesis, critique, verification, self_check. **Logical**: hypothesis, verification, analysis, decomposition. **Meta**: metacognition, observation, revision. **Claude-style**: self_check (double-check before concluding), angle_exploration (explore different angles). Default: "analysis".
 - `stage` (string, optional): The thinking stage. **Any string is accepted.** Predefined stages include:
   - "Problem Definition" (default)
   - "Requirement Analysis"

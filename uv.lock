@@ -2083,7 +2083,7 @@ wheels = [
 
 [[package]]
 name = "sequential-thinking"
-version = "0.7.1"
+version = "0.7.4"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },

@@ -1,5 +1,33 @@
 # Changelog
 
+## Version 0.7.5 (2026-03-13) — Claude-Inspired Extended Thinking
+
+### Fixed
+- **config.py**: Only merge YAML values when they are dicts; prevents TypeError when `extendedThinking: false` (boolean) is used.
+- **reflection.py**: `revises_thought_id` comparison is now case-insensitive (UUIDs).
+- **analysis.py**: `generate_summary` conclusions separator uses `"; "` for English, `"；"` for Chinese.
+- **advanced_analysis.py**: Removed unused `numpy` import.
+- **reflection.py**: Removed redundant `branchExplorationCount` from `extendedThinkingMetrics` (use `reasoningHealth.branchCount`).
+- **server.py**: Replaced `json.JSONDecodeError` with `pydantic.ValidationError` for ThoughtData validation failures.
+
+### Added
+- **Claude-inspired thought types** (models.py): `self_check` (double/triple-check before concluding), `angle_exploration` (explore different angles and branches of reasoning).
+- **Extended thinking reflection prompts** (reflection.py): Three new checks when `features.extendedThinking.enabled`:
+  - Synthesis without self-check: Suggests `self_check` or `verification` before concluding.
+  - Missing angle exploration: Encourages `angle_exploration` or `divergence` when reasoning is too linear.
+  - Adaptive thinking depth: Suggests more thinking when problem is complex (multiple stages, branches, or revisions).
+- **Extended thinking metrics** (analysis.py, reflection.py): `extendedThinkingMetrics` in context/reasoningHealth: `hasSelfCheck`, `hasAngleExploration`, `branchCount`, `suggestedDepth`.
+- **Config** (config.yaml, config.py): `features.extendedThinking.enabled` to toggle Claude-style prompts.
+
+### Fixed
+- **advanced_analysis.py**: `CHINESE_STOPWORDS` undefined — now correctly uses `load_chinese_stopwords()`.
+
+### Changed
+- **process_thought docstring** (server.py): Documents new thought types `self_check`, `angle_exploration`.
+- **README.md**: Documents Claude-inspired extended thinking feature and new thought types.
+
+---
+
 ## Version 0.7.4 (2026-03-12) — Tools Cleanup & Real Summary
 
 ### Removed

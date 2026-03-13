@@ -3,11 +3,17 @@
 Analyzes the reasoning chain patterns and generates reflection prompts
 to guide the LLM toward more rigorous, self-aware thinking. Aligned with
 human cognition: divergent/convergent balance, logical rigor, and metacognition.
+
+Claude-inspired extensions (参考 Claude Extended Thinking):
+- Multi-angle exploration: exploring different angles and branches of reasoning
+- Double/triple-checking: re-verifying answers before concluding
+- Adaptive thinking depth: suggest more thinking when problem is complex
 """
 
 from typing import List, Optional, Dict, Any
 from .models import ThoughtData, ThoughtType
 from .logging_conf import configure_logging
+from .config import config
 
 logger = configure_logging("sequential-thinking.reflection")
 
@@ -29,6 +35,10 @@ class ReflectionEngine:
     CONVERGENCE_WITHOUT_DIVERGENCE_THRESHOLD = 4  # Too rigid, no exploration
     NO_METACOGNITION_THRESHOLD = 8  # Long chain without stepping back
     NO_ANALOGY_SUGGEST_THRESHOLD = 6  # Complex problem, suggest analogy
+    # Claude-inspired: double-check before synthesis
+    NO_SELF_CHECK_BEFORE_SYNTHESIS_THRESHOLD = 3  # Synthesis without prior self_check
+    NO_ANGLE_EXPLORATION_THRESHOLD = 5  # Long chain without exploring different angles
+    COMPLEX_PROBLEM_THRESHOLD = 8  # Suggest more thinking depth (adaptive thinking)
 
     @staticmethod
     def generate_reflection(
@@ -91,28 +101,48 @@ class ReflectionEngine:
             ReflectionEngine._check_suggest_analogy(all_thoughts, lang)
         )
 
+        # --- Check 9–11 (Claude): Extended thinking prompts (when enabled) ---
+        if config.features.extended_thinking.enabled:
+            prompts.extend(
+                ReflectionEngine._check_missing_self_check(current_thought, all_thoughts, lang)
+            )
+            prompts.extend(
+                ReflectionEngine._check_missing_angle_exploration(all_thoughts, lang)
+            )
+            prompts.extend(
+                ReflectionEngine._check_adaptive_thinking_depth(all_thoughts, lang)
+            )
+
         if not prompts:
             return None
 
         # Build reasoning graph statistics with cognitive balance
         type_distribution = ReflectionEngine._get_type_distribution(all_thoughts)
         cognitive_balance = ReflectionEngine._get_cognitive_balance(all_thoughts)
+        reasoning_health: Dict[str, Any] = {
+            "typeDistribution": type_distribution,
+            "cognitiveBalance": cognitive_balance,
+            "totalThoughts": len(all_thoughts),
+            "branchCount": len(set(
+                t.branch_label for t in all_thoughts if t.branch_label
+            )),
+            "revisionCount": len([
+                t for t in all_thoughts if t.revises_thought_id
+            ]),
+            "maxDepth": ReflectionEngine._calculate_max_depth(all_thoughts),
+        }
+        # Claude-inspired extended thinking metrics (when enabled)
+        if config.features.extended_thinking.enabled:
+            reasoning_health["extendedThinkingMetrics"] = {
+                "hasSelfCheck": any(t.thought_type == ThoughtType.SELF_CHECK for t in all_thoughts),
+                "hasAngleExploration": any(t.thought_type == ThoughtType.ANGLE_EXPLORATION for t in all_thoughts),
+                "suggestedDepth": "more" if len(all_thoughts) >= ReflectionEngine.COMPLEX_PROBLEM_THRESHOLD else "adequate",
+            }
 
         return {
             "hasReflection": True,
             "reflectionPrompts": prompts,
-            "reasoningHealth": {
-                "typeDistribution": type_distribution,
-                "cognitiveBalance": cognitive_balance,
-                "totalThoughts": len(all_thoughts),
-                "branchCount": len(set(
-                    t.branch_label for t in all_thoughts if t.branch_label
-                )),
-                "revisionCount": len([
-                    t for t in all_thoughts if t.revises_thought_id
-                ]),
-                "maxDepth": ReflectionEngine._calculate_max_depth(all_thoughts),
-            }
+            "reasoningHealth": reasoning_health,
         }
 
     @staticmethod
@@ -237,8 +267,9 @@ class ReflectionEngine:
         if not current_thought.revises_thought_id:
             return []
 
-        target_ids = {str(t.id) for t in all_thoughts}
-        if current_thought.revises_thought_id not in target_ids:
+        target_ids = {str(t.id).lower() for t in all_thoughts}
+        rev_id = (current_thought.revises_thought_id or "").strip().lower()
+        if rev_id not in target_ids:
             if lang == "zh":
                 return [
                     f"⚠️ 本思考声明修订 ID '{current_thought.revises_thought_id}' "
@@ -342,6 +373,104 @@ class ReflectionEngine:
                     "Try analogy: What is this problem similar to? How would another domain solve it?"
                 ]
         return []
+
+    @staticmethod
+    def _check_missing_self_check(
+        current_thought: ThoughtData,
+        all_thoughts: List[ThoughtData],
+        lang: str
+    ) -> List[str]:
+        """Claude-inspired: Detect synthesis/conclusion without prior self-check.
+
+        Claude 'double- and triple-checks answers' before concluding.
+        """
+        if current_thought.thought_type not in (ThoughtType.SYNTHESIS, ThoughtType.CONVERGENCE):
+            return []
+
+        recent = all_thoughts[:-1]  # Exclude current
+        if len(recent) < ReflectionEngine.NO_SELF_CHECK_BEFORE_SYNTHESIS_THRESHOLD:
+            return []
+
+        has_self_check = any(t.thought_type == ThoughtType.SELF_CHECK for t in recent)
+        has_verification = any(t.thought_type == ThoughtType.VERIFICATION for t in recent)
+        if has_self_check or has_verification:
+            return []
+
+        if lang == "zh":
+            return [
+                "🔍 参考 Claude 思考模式：在得出综合结论前，建议用 self_check 或 verification "
+                "进行自我校验——重新审视关键推理步骤，确保没有遗漏或错误。"
+            ]
+        else:
+            return [
+                "🔍 Claude-style: Before concluding, consider self_check or verification—"
+                "double-check key reasoning steps to ensure no gaps or errors."
+            ]
+
+    @staticmethod
+    def _check_missing_angle_exploration(
+        all_thoughts: List[ThoughtData], lang: str
+    ) -> List[str]:
+        """Claude-inspired: Detect long reasoning without exploring different angles.
+
+        Claude 'explores many different angles and branches of reasoning'.
+        """
+        threshold = ReflectionEngine.NO_ANGLE_EXPLORATION_THRESHOLD
+        if len(all_thoughts) < threshold:
+            return []
+
+        recent = all_thoughts[-threshold:]
+        has_angle = any(t.thought_type == ThoughtType.ANGLE_EXPLORATION for t in recent)
+        has_divergence = any(t.thought_type in ThoughtType.DIVERGENT_TYPES for t in recent)
+        if has_angle or has_divergence:
+            return []
+
+        if lang == "zh":
+            return [
+                "📐 参考 Claude 思考模式：已连续多步未探索不同角度。"
+                "建议用 angle_exploration 或 divergence 尝试从另一视角审视问题。"
+            ]
+        else:
+            return [
+                "📐 Claude-style: No angle exploration recently. "
+                "Consider angle_exploration or divergence to view the problem from another perspective."
+            ]
+
+    @staticmethod
+    def _check_adaptive_thinking_depth(
+        all_thoughts: List[ThoughtData], lang: str
+    ) -> List[str]:
+        """Claude-inspired: Suggest more thinking when problem appears complex.
+
+        Extended thinking = more time/compute for harder problems.
+        """
+        if len(all_thoughts) < ReflectionEngine.COMPLEX_PROBLEM_THRESHOLD:
+            return []
+
+        # Heuristic: many stages or many branches = complex
+        stages = len(set(t.stage for t in all_thoughts))
+        branches = len(set(t.branch_label for t in all_thoughts if t.branch_label))
+        revisions = sum(1 for t in all_thoughts if t.revises_thought_id)
+
+        is_complex = stages >= 3 or branches >= 2 or revisions >= 2
+        if not is_complex:
+            return []
+
+        # Only suggest if we haven't suggested recently (avoid spam)
+        recent_types = [t.thought_type for t in all_thoughts[-3:]]
+        if ThoughtType.METACOGNITION in recent_types:
+            return []  # Already reflecting
+
+        if lang == "zh":
+            return [
+                "⏱️ 问题较复杂，Claude 模式建议投入更多思考深度。"
+                "可用 metacognition 审视：当前推理是否充分？是否需要更多角度或验证？"
+            ]
+        else:
+            return [
+                "⏱️ Problem appears complex—Claude-style extended thinking suggests more depth. "
+                "Use metacognition: Is your reasoning sufficient? Need more angles or verification?"
+            ]
 
     @staticmethod
     def _get_cognitive_balance(thoughts: List[ThoughtData]) -> Dict[str, int]:
