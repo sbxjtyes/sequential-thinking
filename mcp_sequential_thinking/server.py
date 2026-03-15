@@ -275,6 +275,29 @@ def main():
             mcp.settings.port = args.port
             logger.info(f"FastMCP settings: host={mcp.settings.host}, port={mcp.settings.port}")
 
+    # For HTTP/SSE transport, add filters to suppress noisy client disconnect errors
+    if args.transport in ["http", "sse"]:
+        import logging
+
+        class ClientDisconnectFilter(logging.Filter):
+            """Filter out noisy client disconnect and network errors."""
+            _suppressed_fragments = (
+                "ClientDisconnect",
+                "指定的网络名不再可用",
+                "WinError 64",
+                "Accept failed on a socket",
+                "Task exception was never retrieved",
+            )
+
+            def filter(self, record: logging.LogRecord) -> bool:
+                msg = record.getMessage()
+                return not any(frag in msg for frag in self._suppressed_fragments)
+
+        disconnect_filter = ClientDisconnectFilter()
+        # Apply filter to MCP, uvicorn, starlette, and asyncio loggers
+        for logger_name in ("mcp", "uvicorn", "uvicorn.error", "starlette", "asyncio"):
+            logging.getLogger(logger_name).addFilter(disconnect_filter)
+
     # Run the MCP server with specified transport
     if args.transport == "stdio":
         mcp.run()

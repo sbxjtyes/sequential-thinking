@@ -1,6 +1,7 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Set
+from typing import List, FrozenSet
+import numpy as np
 import jieba
 import os
 
@@ -8,7 +9,7 @@ from .models import ThoughtData
 
 # Load Chinese stop words and pre-tokenize with jieba so the set matches tokenizer output.
 # This avoids "stop_words may be inconsistent with your preprocessing" warning.
-def load_chinese_stopwords() -> Set[str]:
+def load_chinese_stopwords() -> FrozenSet[str]:
     script_dir = os.path.dirname(__file__)
     stopwords_path = os.path.join(script_dir, "stopwords_zh.txt")
     try:
@@ -16,14 +17,14 @@ def load_chinese_stopwords() -> Set[str]:
             raw = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
         print(f"Warning: Chinese stopwords file not found at {stopwords_path}. Using no stop words for Chinese.")
-        return set()
+        return frozenset()
     # Tokenize each stop word with jieba; union all tokens so sklearn's validation passes
-    tokens: Set[str] = set()
+    tokens: set[str] = set()
     for w in raw:
         tokens.add(w)
         for t in jieba.cut(w):
             tokens.add(t)
-    return tokens
+    return frozenset(tokens)
 
 def chinese_tokenizer(text):
     """
